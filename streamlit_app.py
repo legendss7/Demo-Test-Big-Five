@@ -5,6 +5,8 @@ import plotly.graph_objects as go
 import plotly.express as px
 import streamlit.components.v1 as components
 import random
+components.html('<div id="top-anchor"></div>', height=0)
+
 
 from datetime import datetime
 if "scroll_key" not in st.session_state:
@@ -160,41 +162,40 @@ if 'fecha_evaluacion' not in st.session_state:
 
 # --- 2. FUNCIONES DE SCROLL ---
 def forzar_scroll_al_top():
-    """Fuerza el scroll visual hacia el inicio de la página (versión estable)."""
-    # Garantiza que la clave exista antes de incrementarla
-    if "scroll_key" not in st.session_state:
-        st.session_state.scroll_key = 0
+    """Fuerza el scroll al inicio de la vista de forma segura (compatible con Streamlit Cloud)."""
+    # Crear o actualizar la variable de control
+    st.session_state.scroll_key = st.session_state.get("scroll_key", 0) + 1
 
-    # Incrementa el contador de forma segura
-    st.session_state.scroll_key += 1
+    # Contenedor seguro para HTML (impide errores en Streamlit Cloud)
+    placeholder = st.empty()
 
-    # Código JavaScript seguro con tolerancia a errores
     js_code = """
         <script>
-            try {
+            window.addEventListener('load', function() {
                 setTimeout(function() {
-                    const doc = window.parent?.document || document;
-                    const anchor = doc.querySelector('#top-anchor');
-                    if (anchor) {
-                        anchor.scrollIntoView({ behavior: 'auto', block: 'start' });
-                        return;
+                    try {
+                        const doc = window.parent?.document || document;
+                        const anchor = doc.querySelector('#top-anchor');
+                        if (anchor) {
+                            anchor.scrollIntoView({ behavior: 'auto', block: 'start' });
+                        } else {
+                            const container = doc.querySelector('[data-testid="stAppViewContainer"]');
+                            if (container) {
+                                container.scrollTo({ top: 0, behavior: 'auto' });
+                            } else {
+                                window.scrollTo({ top: 0, behavior: 'auto' });
+                            }
+                        }
+                    } catch (err) {
+                        console.error('Scroll error:', err);
                     }
-                    const container = doc.querySelector('[data-testid="stAppViewContainer"]');
-                    if (container) {
-                        container.scrollTo({ top: 0, behavior: 'auto' });
-                        return;
-                    }
-                    window.scrollTo({ top: 0, behavior: 'auto' });
-                }, 400);
-            } catch (err) {
-                console.error('Scroll error:', err);
-            }
+                }, 500);
+            });
         </script>
     """
 
-    # Clave única en cada render
-    key_value = f"scroll_{st.session_state.scroll_key}"
-    components.html(js_code, height=0, key=key_value)
+    # Renderizamos el script dentro de un contenedor temporal
+    placeholder.html(js_code, height=0, key=f"scroll_{st.session_state.scroll_key}")
 
 
 # --- 3. FUNCIONES DE CÁLCULO ---
@@ -928,4 +929,5 @@ st.markdown("""
     © 2025 - Herramienta educativa y de orientación | No reemplaza evaluación profesional
 </p>
 """, unsafe_allow_html=True)
+
 
