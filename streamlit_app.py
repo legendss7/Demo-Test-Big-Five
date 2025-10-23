@@ -8,6 +8,9 @@ import streamlit.components.v1 as components
 # --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
 st.set_page_config(layout="wide", page_title="Evaluación Big Five | Perfil Corporativo")
 
+# Colocamos un ancla invisible al inicio de la página para referencia (necesario para el scroll forzado)
+st.html('<a id="top-anchor"></a>')
+
 # Definición de las dimensiones del Big Five y colores (Paleta Corporativa)
 DIMENSIONES = {
     "Apertura a la Experiencia (O)": {"code": "O", "color": "#0077b6", "icon": "💡", "desc": "Imaginación, curiosidad intelectual, aprecio por el arte."},
@@ -17,7 +20,6 @@ DIMENSIONES = {
     "Neuroticismo (N)": {"code": "N", "color": "#0096c7", "icon": "😟", "desc": "Tendencia a experimentar emociones desagradables como la ansiedad, el enfado o la depresión."},
 }
 DIMENSIONES_LIST = list(DIMENSIONES.keys())
-DIMENSIONES_KEYS = [d['code'] for d in DIMENSIONES.values()] # O, C, E, A, N
 
 # Escala Likert de respuesta
 ESCALA_LIKERT = {
@@ -28,7 +30,9 @@ ESCALA_LIKERT = {
     1: "Totalmente en desacuerdo (1)",
 }
 LIKERT_OPTIONS = list(ESCALA_LIKERT.keys())
+
 def reverse_score(score):
+    """Calcula el puntaje inverso para preguntas negativas."""
     return 6 - score
 
 # 25 Preguntas de ejemplo (5 por dimensión)
@@ -81,56 +85,82 @@ if 'current_dimension_index' not in st.session_state:
 if 'should_scroll' not in st.session_state:
     st.session_state.should_scroll = False
 
-# --- 2. FUNCIONES DE UTILERÍA Y LÓGICA ---
+# --- 2. FUNCIONES DE LÓGICA Y ANÁLISIS ---
 
 def forzar_scroll_al_top():
-    """Inyecta un script JS para forzar el scroll al inicio de la página."""
-    st.html("""
+    """Función MAXIMAMENTE FORZADA para el scroll al top."""
+    js_code = """
         <script>
-            window.parent.document.querySelector('section.main').scrollTo(0, 0);
+            setTimeout(function() {
+                var topAnchor = window.parent.document.getElementById('top-anchor');
+                if (topAnchor) {
+                    // Si existe el ancla, lo usa
+                    topAnchor.scrollIntoView({ behavior: 'auto', block: 'start' });
+                } else {
+                    // Si no, fuerza el scroll en la ventana padre
+                    window.parent.scrollTo({ top: 0, behavior: 'auto' });
+                    // Y en el contenedor principal de Streamlit
+                    var mainContent = window.parent.document.querySelector('[data-testid="stAppViewContainer"]');
+                    if (mainContent) {
+                        mainContent.scrollTo({ top: 0, behavior: 'auto' });
+                    }
+                }
+            }, 250); 
         </script>
-    """)
-
-# Lógica de cálculo y roles (Oculta para mantener el foco en el flujo)
-# (Las funciones calcular_resultados, get_nivel_interpretacion, get_recomendaciones y get_roles_no_recomendados permanecen igual)
+        """
+    # Inyectar el código JavaScript
+    st.components.v1.html(js_code, height=0, scrolling=False)
 
 def calcular_resultados(respuestas):
+    """Calcula las puntuaciones promedio de las 5 dimensiones (Escala 0-100)."""
     scores = {dim: [] for dim in DIMENSIONES_LIST}
+    
     for p in PREGUNTAS:
         respuesta = respuestas.get(p['key'])
+        
         if respuesta is None: score = 3
         elif p['reverse']: score = reverse_score(respuesta) 
         else: score = respuesta
+            
         scores[p['dim']].append(score)
+        
     resultados = {}
     for dim, score_list in scores.items():
         avg_score = np.mean(score_list)
+        # Normaliza el promedio (1-5) a una escala de 0-100
         percent_score = ((avg_score - 1) / 4) * 100
         resultados[dim] = round(percent_score)
+        
     return resultados
 
 def get_nivel_interpretacion(score):
-    if score >= 75: return "Muy Alto", "#2a9d8f", "Dominante"
-    elif score >= 60: return "Alto", "#264653", "Marcado"
-    elif score >= 40: return "Promedio", "#e9c46a", "Moderado"
-    elif score >= 25: return "Bajo", "#f4a261", "Suave"
-    else: return "Muy Bajo", "#e76f51", "Recesivo"
+    """Clasifica el puntaje y retorna un nivel de texto y color corporativo."""
+    if score >= 75: return "Muy Alto", "#2a9d8f", "Dominante" # Verde fuerte
+    elif score >= 60: return "Alto", "#264653", "Marcado" # Azul oscuro
+    elif score >= 40: return "Promedio", "#e9c46a", "Moderado" # Amarillo
+    elif score >= 25: return "Bajo", "#f4a261", "Suave" # Naranja suave
+    else: return "Muy Bajo", "#e76f51", "Recesivo" # Rojo coral
 
 def get_recomendaciones(dim, score):
+    """Genera recomendaciones profesionales específicas por dimensión y nivel."""
     nivel_map = get_nivel_interpretacion(score)[0]
+    
     rec = {
-        "Apertura a la Experiencia (O)": {"Muy Alto": "Fomentar roles de **innovación, I+D y diseño estratégico**.", "Bajo": "Ubicar en tareas con **procedimientos claros y poca ambigüedad**.", "Promedio": "Apto para roles que requieren un balance entre **estabilidad y creatividad**."},
-        "Responsabilidad (C)": {"Muy Alto": "Asignar funciones de **auditoría, gestión de proyectos y roles críticos**.", "Bajo": "Evitar roles que demanden alta autonomía en la planificación. Necesita **seguimiento estructurado**.", "Promedio": "Capaz de mantener la **disciplina en roles definidos**."},
-        "Extraversión (E)": {"Muy Alto": "Ideal para **ventas, liderazgo de equipos y networking corporativo**.", "Bajo": "Apto para roles de **análisis profundo, desarrollo individual y especialistas técnicos**.", "Promedio": "Perfil **adaptable**; Entrenar en habilidades de presentación y comunicación."},
-        "Amabilidad (A)": {"Muy Alto": "Excelente para **recursos humanos, servicio al cliente y resolución de conflictos**.", "Bajo": "Ubicar en posiciones que requieran **negociación dura o toma de decisiones complejas** sin sesgo emocional.", "Promedio": "Buen colaborador. Fomentar el **liderazgo servicial y la mediación**."},
-        "Neuroticismo (N)": {"Muy Alto": "Requiere **soporte de bienestar emocional y un ambiente laboral de baja presión**.", "Bajo": "Es un perfil **resiliente y estable**. Ideal para roles bajo presión constante.", "Promedio": "Muestra **buena gestión emocional**, pero puede fluctuar."},
+        "Apertura a la Experiencia (O)": {"Muy Alto": "Fomentar roles de **innovación, I+D y diseño estratégico**. Se adaptará bien a cambios y proyectos creativos.", "Bajo": "Ubicar en tareas con **procedimientos claros y poca ambigüedad**. Puede requerir entrenamiento para manejar el cambio o nuevas tecnologías.", "Promedio": "Apto para roles que requieren un balance entre **estabilidad y creatividad**. Fomentar la participación en grupos de mejora continua."},
+        "Responsabilidad (C)": {"Muy Alto": "Asignar funciones de **auditoría, gestión de proyectos y roles críticos** donde la precisión es vital. Excelente autogestión.", "Bajo": "Evitar roles que demanden alta autonomía en la planificación. Necesita **seguimiento estructurado y objetivos a corto plazo**.", "Promedio": "Capaz de mantener la **disciplina en roles definidos**. Potenciar con herramientas de planificación y gestión del tiempo."},
+        "Extraversión (E)": {"Muy Alto": "Ideal para **ventas, liderazgo de equipos y networking corporativo**. Prospera en ambientes sociales y le gusta influir.", "Bajo": "Apto para roles de **análisis profundo, desarrollo individual y especialistas técnicos**. Requiere un ambiente de trabajo tranquilo y enfocado.", "Promedio": "Perfil **adaptable**; puede funcionar bien en equipos y en tareas solitarias. Entrenar en habilidades de presentación y comunicación."},
+        "Amabilidad (A)": {"Muy Alto": "Excelente para **recursos humanos, servicio al cliente y resolución de conflictos**. Promueve un clima laboral positivo.", "Bajo": "Ubicar en posiciones que requieran **negociación dura o toma de decisiones complejas** sin sesgo emocional. Puede tener dificultades en la cohesión de equipos.", "Promedio": "Buen colaborador. Fomentar el **liderazgo servicial y la mediación** en situaciones grupales."},
+        "Neuroticismo (N)": {"Muy Alto": "Requiere **soporte de bienestar emocional y un ambiente laboral de baja presión**. Evaluar el impacto del estrés en el rendimiento.", "Bajo": "Es un perfil **resiliente y estable**. Ideal para roles bajo presión constante (ej. operaciones críticas, manejo de crisis).", "Promedio": "Muestra **buena gestión emocional, pero puede fluctuar**. Ofrecer talleres de manejo de estrés preventivo."},
     }
+    
     return rec[dim].get(nivel_map, rec[dim].get("Promedio", "Desarrollar un plan de acción basado en las fortalezas y oportunidades en esta dimensión."))
 
 def get_roles_no_recomendados(resultados):
+    """Determina roles no recomendados basándose en puntajes extremos."""
     no_aptos = set()
     UMBRAL_BAJO = 25
     UMBRAL_ALTO = 75
+
     if resultados.get("Neuroticismo (N)", 0) > UMBRAL_ALTO:
         no_aptos.add("Liderazgo de Crisis, Operaciones de Alto Riesgo, Soporte al Cliente (por inestabilidad).")
     if resultados.get("Responsabilidad (C)", 0) < UMBRAL_BAJO:
@@ -141,13 +171,56 @@ def get_roles_no_recomendados(resultados):
         no_aptos.add("Investigación y Desarrollo (I+D), Innovación Tecnológica o funciones de alta ambigüedad.")
     if resultados.get("Extraversión (E)", 0) < UMBRAL_BAJO:
         no_aptos.add("Ventas de Campo (cierre), Relaciones Públicas (RP) o Presentaciones ante grandes audiencias.")
+
     return " | ".join(sorted(list(no_aptos)))
+
+def crear_grafico_radar(resultados):
+    """Crea un gráfico de radar interactivo con estilo corporativo."""
+    categories = list(resultados.keys())
+    values = list(resultados.values())
+    
+    fig = go.Figure(
+        data=[
+            go.Scatterpolar(
+                r=values,
+                theta=categories,
+                fill='toself',
+                name='Tu Perfil',
+                line_color=DIMENSIONES["Responsabilidad (C)"]["color"],
+                fillcolor='rgba(0, 119, 182, 0.2)',
+                marker=dict(size=10, symbol="circle", color=DIMENSIONES["Extraversión (E)"]["color"]),
+            )
+        ],
+        layout=go.Layout(
+            polar=dict(
+                radialaxis=dict(
+                    visible=True,
+                    range=[0, 100],
+                    tickvals=[0, 25, 50, 75, 100],
+                    ticktext=["0", "Bajo", "Promedio", "Alto", "100"],
+                    linecolor="#cccccc"
+                ),
+                angularaxis=dict(
+                    linecolor="#cccccc",
+                    rotation=90,
+                    direction="clockwise"
+                ),
+            ),
+            showlegend=False,
+            height=500,
+            template="simple_white",
+            hovermode="closest",
+        )
+    )
+    fig.update_traces(hovertemplate='<b>%{theta}</b>: %{r} puntos<extra></extra>')
+    
+    return fig
 
 # --- 3. FUNCIONES DE FLUJO DE PÁGINAS ---
 
 def procesar_y_mostrar_resultados():
     """Calcula y avanza a la vista de resultados con animación."""
-    st.session_state.should_scroll = True # Scroll al inicio del reporte
+    st.session_state.should_scroll = True
     with st.spinner('Procesando datos y generando perfil de competencias...'):
         time.sleep(3)
     st.session_state.resultados = calcular_resultados(st.session_state.respuestas)
@@ -187,7 +260,6 @@ def reiniciar_test():
 def vista_inicio():
     st.title("💼 Plataforma de Evaluación Big Five (OCEAN)")
     st.markdown("### Perfil de Competencias y Potencial Profesional")
-    # ... Contenido de la vista de inicio (omitiendo por brevedad, es el mismo que el anterior)
     st.info("Este demo evalúa los **Cinco Grandes factores de personalidad**, esenciales para la selección de personal y el desarrollo profesional. El test consta de **25 preguntas divididas en 5 secciones**.")
     st.markdown(f"""
     <div style="border: 1px solid #0077b6; padding: 15px; border-radius: 8px; background-color: #e6f7ff;">
@@ -220,12 +292,9 @@ def vista_test_activo():
     st.progress(progreso_general, text=f"Progreso General: **{total_respondidas}** de **{total_preguntas}** preguntas respondidas.")
     st.markdown("---")
 
-    # Obtener solo las preguntas de la dimensión actual
     preguntas_dimension = [p for p in PREGUNTAS if p['dim'] == current_dim_name]
     
     with st.form(f"form_dim_{current_index}"):
-        
-        all_answered = True
         
         for i, p in enumerate(preguntas_dimension):
             
@@ -251,11 +320,7 @@ def vista_test_activo():
                         horizontal=True,
                         label_visibility="collapsed"
                     )
-                    
-                    # Validación en tiempo de ejecución de la vista
-                    if st.session_state.respuestas[p['key']] is None:
-                        all_answered = False
-
+            
         st.markdown("---")
         
         button_label = "✅ Finalizar Evaluación y Generar Perfil" if current_index == len(DIMENSIONES_LIST) - 1 else f"➡️ Continuar a {DIMENSIONES_LIST[current_index+1]}"
@@ -264,7 +329,6 @@ def vista_test_activo():
 
         if submitted:
             # 1. Validar que las 5 preguntas de esta dimensión estén respondidas
-            # Usamos los valores guardados en session_state tras el submit
             current_dim_answered = True
             for p in preguntas_dimension:
                 if st.session_state.respuestas.get(p['key']) is None:
@@ -272,14 +336,13 @@ def vista_test_activo():
                     break
             
             if not current_dim_answered:
-                st.error(f"🚨 ¡ATENCIÓN! Debe responder las **{len(preguntas_dimension)} preguntas** de la dimensión actual ({current_dim_name}) antes de continuar.")
+                st.error(f"🚨 ¡ATENCIÓN! Debe responder **todas las preguntas** de la dimensión actual ({current_dim_name}) antes de continuar.")
             else:
                 # 2. Si todo está respondido, avanzar o finalizar
                 if current_index == len(DIMENSIONES_LIST) - 1:
                     procesar_y_mostrar_resultados()
                 else:
                     avanzar_dimension()
-
 
 def vista_resultados():
     st.title("📄 Informe de Perfil Big Five (Corporativo) 🎉")
@@ -309,7 +372,6 @@ def vista_resultados():
                 "Puntuación (0-100)": score,
                 "Nivel": nivel,
                 "Etiqueta": tag,
-                "Descripción": DIMENSIONES[dim]["desc"]
             })
             
         df_resumen = pd.DataFrame(data_resumen)
@@ -336,7 +398,7 @@ def vista_resultados():
 
     st.markdown("---")
     
-    # --- 2. Roles No Recomendados (Nueva Característica) ---
+    # --- 2. Roles No Recomendados ---
     st.header("2. Alerta de Incompatibilidad con Roles Clave 🛑")
     
     roles_no_aptos = get_roles_no_recomendados(resultados)
