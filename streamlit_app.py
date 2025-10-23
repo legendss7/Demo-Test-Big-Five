@@ -163,24 +163,21 @@ def forzar_scroll_al_top():
     js_code = """
         <script>
             setTimeout(function() {
-                // Primero intenta con el ancla superior
                 const anchor = window.parent.document.querySelector('#top-anchor');
                 if (anchor) {
                     anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    return;
-                }
-                // Si no existe, intenta con el contenedor principal
-                const app = window.parent.document.querySelector('[data-testid="stAppViewContainer"]');
-                if (app) {
-                    app.scrollTo({ top: 0, behavior: 'smooth' });
                 } else {
-                    window.parent.scrollTo({ top: 0, behavior: 'smooth' });
+                    const appContainer = window.parent.document.querySelector('[data-testid="stAppViewContainer"]');
+                    if (appContainer) {
+                        appContainer.scrollTo({ top: 0, behavior: 'smooth' });
+                    } else {
+                        window.parent.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
                 }
-            }, 300);
+            }, 400);
         </script>
     """
     components.html(js_code, height=0, key=f"scroll_{st.session_state.scroll_key}")
-
 
 # --- 3. FUNCIONES DE CÁLCULO ---
 def calcular_resultados(respuestas):
@@ -909,5 +906,6 @@ st.markdown("""
     © 2025 - Herramienta educativa y de orientación | No reemplaza evaluación profesional
 </p>
 """, unsafe_allow_html=True)
+
 
 
