@@ -387,7 +387,7 @@ components.html('<a id="top-anchor"></a>', height=0)
 
 def vista_inicio():
     """Vista de inicio."""
-    forzar_scroll_al_top()
+    
     
     st.title("🧠 Test de Personalidad Big Five (OCEAN)")
     st.markdown("### Evaluación Profesional de los Cinco Grandes Factores de Personalidad")
@@ -431,6 +431,7 @@ def vista_inicio():
         if st.button("🎲 Completar Aleatoriamente", type="secondary", use_container_width=True):
             completar_al_azar()
             st.rerun()
+            forzar_scroll_al_top()
 
 def vista_test_activo():
     """Vista del test activo."""
@@ -934,6 +935,7 @@ st.markdown("""
     © 2025 - Herramienta educativa y de orientación | No reemplaza evaluación profesional
 </p>
 """, unsafe_allow_html=True)
+
 
 
 
