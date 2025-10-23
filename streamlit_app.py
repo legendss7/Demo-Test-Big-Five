@@ -424,7 +424,7 @@ def vista_inicio():
             st.rerun()
     
     # --- Scroll al inicio (llamar al final, no dentro de los botones) ---
-    forzar_scroll_al_top()
+forzar_scroll_al_top()
 
 
 def vista_test_activo():
@@ -497,7 +497,7 @@ def vista_test_activo():
                     st.rerun()
     
     # ✅ Scroll al final, después de renderizar todo
-  forzar_scroll_al_top()
+forzar_scroll_al_top()
 
 def vista_resultados():
     """Vista de resultados profesional."""
@@ -549,7 +549,7 @@ def vista_resultados():
     """)
 
     # ✅ Ahora sí: scroll al top al final de la vista (ya con todo renderizado)
-  forzar_scroll_al_top()
+forzar_scroll_al_top()
 
     
     # --- 2. VISUALIZACIONES ---
@@ -947,6 +947,7 @@ st.markdown("""
     © 2025 - Herramienta educativa y de orientación | No reemplaza evaluación profesional
 </p>
 """, unsafe_allow_html=True)
+
 
 
 
