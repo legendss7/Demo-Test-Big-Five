@@ -918,18 +918,18 @@ def vista_resultados():
     autorreportadas. La personalidad es compleja y multidimensional. Este test proporciona una 
     aproximación general a tu perfil, pero no reemplaza una evaluación profesional completa.
     """)
-
 # --- 7. FLUJO PRINCIPAL ---
 
-if st.session_state.stage == 'inicio':
-    components.html('<a id="top-anchor"></a>', height=0)
+# 🔹 Ancla segura (solo se crea una vez)
+st.markdown("<div id='top-anchor'></div>", unsafe_allow_html=True)
 
+if st.session_state.stage == 'inicio':
     vista_inicio()
 elif st.session_state.stage == 'test_activo':
     vista_test_activo()
 elif st.session_state.stage == 'resultados':
     vista_resultados()
-    forzar_scroll_al_top()
+
 
 # --- 8. FOOTER ---
 st.markdown("---")
@@ -940,6 +940,7 @@ st.markdown("""
     © 2025 - Herramienta educativa y de orientación | No reemplaza evaluación profesional
 </p>
 """, unsafe_allow_html=True)
+
 
 
 
