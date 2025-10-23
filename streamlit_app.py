@@ -383,12 +383,14 @@ def reiniciar_test():
     st.session_state.resultados = None
 
 # --- 6. VISTAS ---
-components.html('<a id="top-anchor"></a>', height=0)
+
+# Ancla superior: usa markdown, no components.html
+st.markdown("<div id='top-anchor'></div>", unsafe_allow_html=True)
 
 def vista_inicio():
     """Vista de inicio."""
     
-    
+    # --- CONTENIDO ---
     st.title("🧠 Test de Personalidad Big Five (OCEAN)")
     st.markdown("### Evaluación Profesional de los Cinco Grandes Factores de Personalidad")
     
@@ -405,9 +407,9 @@ def vista_inicio():
     with col1:
         st.subheader("📋 Información del Test")
         st.markdown("""
-        - **Duración:** 10-15 minutos
-        - **Preguntas:** 50 ítems (10 por dimensión)
-        - **Escala:** Likert de 5 puntos
+        - **Duración:** 10-15 minutos  
+        - **Preguntas:** 50 ítems (10 por dimensión)  
+        - **Escala:** Likert de 5 puntos  
         - **Dimensiones evaluadas:**
           - 💡 **O**penness (Apertura a la Experiencia)
           - 🎯 **C**onscientiousness (Responsabilidad)
@@ -431,7 +433,10 @@ def vista_inicio():
         if st.button("🎲 Completar Aleatoriamente", type="secondary", use_container_width=True):
             completar_al_azar()
             st.rerun()
-            forzar_scroll_al_top()
+    
+    # --- Scroll al inicio (llamar al final, no dentro de los botones) ---
+    forzar_scroll_al_top()
+
 
 def vista_test_activo():
     """Vista del test activo."""
@@ -935,6 +940,7 @@ st.markdown("""
     © 2025 - Herramienta educativa y de orientación | No reemplaza evaluación profesional
 </p>
 """, unsafe_allow_html=True)
+
 
 
 
