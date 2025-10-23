@@ -923,6 +923,7 @@ elif st.session_state.stage == 'test_activo':
     vista_test_activo()
 elif st.session_state.stage == 'resultados':
     vista_resultados()
+    forzar_scroll_al_top()
 
 # --- 8. FOOTER ---
 st.markdown("---")
@@ -933,6 +934,7 @@ st.markdown("""
     © 2025 - Herramienta educativa y de orientación | No reemplaza evaluación profesional
 </p>
 """, unsafe_allow_html=True)
+
 
 
 
