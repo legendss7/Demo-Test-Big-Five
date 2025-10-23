@@ -9,7 +9,7 @@ import random
 # --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
 st.set_page_config(layout="wide", page_title="Evaluación Big Five | Perfil Corporativo")
 
-# Colocamos un ancla invisible al inicio de la página para referencia (necesario para el scroll forzado)
+# Colocamos un ancla invisible al inicio de la página para referencia
 st.html('<a id="top-anchor"></a>')
 
 # Definición de las dimensiones del Big Five y colores (Paleta Corporativa)
@@ -83,14 +83,14 @@ if 'resultados' not in st.session_state:
     st.session_state.resultados = None
 if 'current_dimension_index' not in st.session_state:
     st.session_state.current_dimension_index = 0
-# Bandera de scroll
 if 'should_scroll' not in st.session_state:
     st.session_state.should_scroll = False
 
 # --- 2. FUNCIONES DE LÓGICA Y ANÁLISIS ---
 
-def forzar_scroll_al_top():
-    """Función MAXIMAMENTE FORZADA para el scroll al top (SIN KEY DINÁMICA para evitar TypeError)."""
+def get_scroll_js():
+    """Retorna el código JavaScript para forzar el scroll al top."""
+    # Usamos una función simple que retorna el JS para inyectarlo vía st.markdown
     js_code = """
         <script>
             setTimeout(function() {
@@ -107,8 +107,7 @@ def forzar_scroll_al_top():
             }, 250); 
         </script>
         """
-    # Se usa una clave estática para evitar el TypeError
-    st.components.v1.html(js_code, height=0, scrolling=False, key="static_scroll_comp") 
+    return js_code
 
 def calcular_resultados(respuestas):
     """Calcula las puntuaciones promedio de las 5 dimensiones (Escala 0-100)."""
@@ -179,7 +178,6 @@ def get_roles_no_recomendados(resultados):
     UMBRAL_BAJO = 25
     UMBRAL_ALTO = 75
 
-    # Lógica para mostrar la incompatibilidad solo cuando hay un puntaje extremo
     if resultados.get("Neuroticismo (N)", 0) > UMBRAL_ALTO:
         no_aptos.add("Liderazgo de Crisis (N>75)")
     if resultados.get("Responsabilidad (C)", 0) < UMBRAL_BAJO:
@@ -479,7 +477,9 @@ elif st.session_state.stage == 'test_activo':
 elif st.session_state.stage == 'resultados':
     vista_resultados()
 
-# --- 6. EJECUCIÓN CONDICIONAL DEL SCROLL (FIX FINAL) ---
+# --- 6. EJECUCIÓN CONDICIONAL DEL SCROLL (FIX FINAL ROBUSTO) ---
+# Ejecución del JS de scroll al final del script para que se aplique después del renderizado.
 if st.session_state.should_scroll:
-    forzar_scroll_al_top()
+    js_code = get_scroll_js()
+    st.markdown(js_code, unsafe_allow_html=True)
     st.session_state.should_scroll = False
