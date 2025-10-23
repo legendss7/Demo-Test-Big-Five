@@ -5,8 +5,6 @@ import plotly.graph_objects as go
 import plotly.express as px
 import streamlit.components.v1 as components
 import random
-import streamlit.components.v1 as components
-
 from datetime import datetime
 
 # --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
@@ -17,7 +15,8 @@ st.set_page_config(
 )
 
 # Ancla para scroll
-st.html('<a id="top-anchor"></a>')
+components.html('<a id="top-anchor"></a>', height=0)
+
 
 # Definición de las dimensiones del Big Five
 DIMENSIONES = {
@@ -155,7 +154,7 @@ if 'scroll_key' not in st.session_state:
 if 'fecha_evaluacion' not in st.session_state:
     st.session_state.fecha_evaluacion = None
 
-# --- 2. FUNCIONES DE SCROLL (DESHABILITADAS) ---
+# --- 2. FUNCIONES DE SCROLL ---
 def forzar_scroll_al_top():
     """Fuerza el scroll visual hacia el inicio de la página."""
     if "scroll_key" not in st.session_state:
@@ -165,21 +164,25 @@ def forzar_scroll_al_top():
     js_code = """
         <script>
             setTimeout(function() {
+                // Buscar el ancla de la parte superior
                 const anchor = window.parent.document.querySelector('#top-anchor');
                 if (anchor) {
-                    anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                } else {
-                    const appContainer = window.parent.document.querySelector('[data-testid="stAppViewContainer"]');
-                    if (appContainer) {
-                        appContainer.scrollTo({ top: 0, behavior: 'smooth' });
-                    } else {
-                        window.parent.scrollTo({ top: 0, behavior: 'smooth' });
-                    }
+                    anchor.scrollIntoView({ behavior: 'auto', block: 'start' });
+                    return;
                 }
-            }, 400);
+                // Si no existe, sube al top del contenedor principal
+                const container = window.parent.document.querySelector('[data-testid="stAppViewContainer"]');
+                if (container) {
+                    container.scrollTo({ top: 0, behavior: 'auto' });
+                    return;
+                }
+                // Último recurso: scroll del documento
+                window.parent.scrollTo({ top: 0, behavior: 'auto' });
+            }, 400); // Espera a que se renderice la nueva vista
         </script>
     """
     components.html(js_code, height=0, key=f"scroll_{st.session_state.scroll_key}")
+
 
 # --- 3. FUNCIONES DE CÁLCULO ---
 def calcular_resultados(respuestas):
@@ -908,7 +911,3 @@ st.markdown("""
     © 2025 - Herramienta educativa y de orientación | No reemplaza evaluación profesional
 </p>
 """, unsafe_allow_html=True)
-
-
-
-
