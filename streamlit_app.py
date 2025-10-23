@@ -73,6 +73,7 @@ PREGUNTAS = [
 if 'stage' not in st.session_state:
     st.session_state.stage = 'inicio'
 if 'respuestas' not in st.session_state:
+    # Inicializa todas las respuestas como None (no respondidas)
     st.session_state.respuestas = {p['key']: None for p in PREGUNTAS}
 if 'resultados' not in st.session_state:
     st.session_state.resultados = None
@@ -86,7 +87,7 @@ def calcular_resultados(respuestas):
     for p in PREGUNTAS:
         respuesta = respuestas.get(p['key'])
         
-        # Si no fue respondida, se asume neutral (3). Esto no debería pasar si la validación funciona.
+        # Este paso es de resguardo, la validación en el formulario debe garantizar que no haya None.
         if respuesta is None:
             score = 3
         elif p['reverse']:
@@ -108,15 +109,15 @@ def calcular_resultados(respuestas):
 def get_nivel_interpretacion(score):
     """Clasifica el puntaje y retorna un nivel de texto y color corporativo."""
     if score >= 75: 
-        return "Muy Alto", "#2a9d8f", "Dominante"
+        return "Muy Alto", "#2a9d8f", "Dominante" # Verde fuerte
     elif score >= 60: 
-        return "Alto", "#264653", "Marcado"
+        return "Alto", "#264653", "Marcado" # Azul oscuro
     elif score >= 40: 
-        return "Promedio", "#e9c46a", "Moderado"
+        return "Promedio", "#e9c46a", "Moderado" # Amarillo
     elif score >= 25: 
-        return "Bajo", "#f4a261", "Suave"
+        return "Bajo", "#f4a261", "Suave" # Naranja suave
     else: 
-        return "Muy Bajo", "#e76f51", "Recesivo"
+        return "Muy Bajo", "#e76f51", "Recesivo" # Rojo coral
 
 def get_recomendaciones(dim, score):
     """Genera recomendaciones profesionales específicas por dimensión y nivel."""
@@ -150,47 +151,75 @@ def get_recomendaciones(dim, score):
         },
     }
     
-    # Intenta obtener la recomendación específica, si no, usa la recomendación general.
     return rec[dim].get(nivel_map, rec[dim].get("Promedio", "Desarrollar un plan de acción basado en las fortalezas y oportunidades en esta dimensión."))
 
+def get_roles_no_recomendados(resultados):
+    """Determina roles no recomendados basándose en puntajes extremos."""
+    no_aptos = set()
+    
+    # Umbrales
+    UMBRAL_BAJO = 25
+    UMBRAL_ALTO = 75
+
+    # 1. Neuroticismo Alto (N > 75): Problemas en Liderazgo y Crisis.
+    if resultados.get("Neuroticismo (N)", 0) > UMBRAL_ALTO:
+        no_aptos.add("Liderazgo de Crisis, Operaciones de Alto Riesgo, Soporte al Cliente (por inestabilidad emocional/ansiedad).")
+
+    # 2. Responsabilidad Baja (C < 25): Problemas en Proyectos y Detalle.
+    if resultados.get("Responsabilidad (C)", 0) < UMBRAL_BAJO:
+        no_aptos.add("Gestión de Proyectos Críticos, Auditoría, Roles de Control de Calidad o cualquier función que exija consistencia y puntualidad extremas.")
+
+    # 3. Amabilidad Baja (A < 25): Problemas en RR.HH. y Cooperación.
+    if resultados.get("Amabilidad (A)", 0) < UMBRAL_BAJO:
+        no_aptos.add("Recursos Humanos, Mediación, Trabajo Social o cualquier rol que requiera una colaboración y empatía constantes.")
+        
+    # 4. Apertura Baja (O < 25): Problemas en Innovación y Cambio.
+    if resultados.get("Apertura a la Experiencia (O)", 0) < UMBRAL_BAJO:
+        no_aptos.add("Investigación y Desarrollo (I+D), Innovación Tecnológica o funciones que demanden adaptación constante y pensamiento lateral.")
+        
+    # 5. Extraversión Baja (E < 25): Problemas en Venta y Networking.
+    if resultados.get("Extraversión (E)", 0) < UMBRAL_BAJO:
+        no_aptos.add("Ventas de Campo (cierre), Relaciones Públicas (RP) o Presentaciones ante grandes audiencias (por preferencia a la introspección).")
+
+    return " | ".join(sorted(list(no_aptos)))
+
+
+# Funciones de flujo y control
 def procesar_y_mostrar_resultados():
     """Valida, calcula los resultados y simula el proceso con animación."""
     
-    # Validación: Asegurarse de que todas las preguntas fueron respondidas
-    if None in st.session_state.respuestas.values():
-        st.error("🚨 Debe responder todas las 25 preguntas antes de finalizar el test.")
-        return
-        
+    # La validación se hace en vista_test, pero este es el paso final de procesamiento
+    
     # Animación Corporativa
     st.markdown("""
         <style>
             .stSpinner > div > div {
-                border-top-color: #0096c7; /* Color primario */
+                border-top-color: #0096c7;
                 border-right-color: #0077b6;
             }
         </style>
     """, unsafe_allow_html=True)
     
     with st.spinner('Procesando datos y generando perfil de competencias...'):
-        time.sleep(3) # Simular procesamiento
+        time.sleep(3)
     
     st.session_state.resultados = calcular_resultados(st.session_state.respuestas)
     st.session_state.stage = 'resultados'
-    st.rerun() # CORRECCIÓN: Usar st.rerun()
+    st.rerun()
 
 def iniciar_test():
     """Inicia la fase de test y reinicia las respuestas."""
     st.session_state.stage = 'test'
     st.session_state.respuestas = {p['key']: None for p in PREGUNTAS} 
     st.session_state.resultados = None
-    st.rerun() # CORRECCIÓN: Usar st.rerun()
+    st.rerun()
 
 def reiniciar_test():
     """Reinicia la aplicación a la vista de inicio."""
     st.session_state.stage = 'inicio'
     st.session_state.respuestas = {p['key']: None for p in PREGUNTAS} 
     st.session_state.resultados = None
-    st.rerun() # CORRECCIÓN: Usar st.rerun()
+    st.rerun()
 
 # --- 3. FUNCIONES DE VISUALIZACIÓN ---
 
@@ -262,24 +291,7 @@ def vista_inicio():
 
     with col_start:
         st.subheader("Listo para comenzar?")
-        # Botón con estilo corporativo
-        st.markdown(f"""
-        <style>
-            .stButton>button {{
-                background-color: #0096c7;
-                color: white;
-                font-weight: bold;
-                padding: 10px 20px;
-                border-radius: 8px;
-                border: none;
-                transition: background-color 0.3s ease;
-                width: 100%;
-            }}
-            .stButton>button:hover {{
-                background-color: #0077b6;
-            }}
-        </style>
-        """, unsafe_allow_html=True)
+        # Botón con estilo corporativo (CSS ya definido en el código)
         st.button("🚀 Iniciar Evaluación Profesional", type="primary", key="btn_inicio", on_click=iniciar_test)
 
 def vista_test():
@@ -300,7 +312,7 @@ def vista_test():
     """, unsafe_allow_html=True)
     st.progress(progreso)
 
-    # Usamos un formulario para enviar todas las respuestas juntas y forzar la validación
+    # Usamos un formulario para enviar todas las respuestas juntas
     with st.form("big_five_form"):
         
         current_dim = ""
@@ -321,24 +333,32 @@ def vista_test():
                 with col_text:
                     st.markdown(f"**Afirmación:** {p['text']}")
                     
+                    # Recupera el valor actual para mantener la selección al rerunnear
+                    initial_value = st.session_state.respuestas[p['key']]
+                    initial_index = LIKERT_OPTIONS.index(initial_value) if initial_value is not None else None
+                    
                     # Usar st.radio para la selección de respuesta
-                    respuesta_key = f"radio_{p['key']}"
-                    
-                    # Busca la selección actual para el índice. Si es None, el índice debe ser None.
-                    initial_value = st.session_state.respuestas.get(p['key'])
-                    
                     st.session_state.respuestas[p['key']] = st.radio(
                         label=f"Respuesta para la pregunta {i+1}",
                         options=LIKERT_OPTIONS,
                         format_func=lambda x: ESCALA_LIKERT[x],
-                        index=LIKERT_OPTIONS.index(initial_value) if initial_value is not None else None,
-                        key=respuesta_key,
+                        index=initial_index,
+                        key=f"radio_{p['key']}",
                         horizontal=True,
                         label_visibility="collapsed"
                     )
             
         st.markdown("---")
-        st.form_submit_button("✅ Finalizar Evaluación y Generar Perfil", type="primary", use_container_width=True, on_click=procesar_y_mostrar_resultados)
+        
+        # Botón de envío SIN on_click para permitir la validación en el bloque IF
+        submitted = st.form_submit_button("✅ Finalizar Evaluación y Generar Perfil", type="primary", use_container_width=True)
+
+        if submitted:
+            # FIX DE VALIDACIÓN: La validación ahora ocurre después del submit, cuando las respuestas están disponibles.
+            if None in st.session_state.respuestas.values():
+                st.error("🚨 ¡ATENCIÓN! Debe responder **todas las 25 preguntas** antes de finalizar el test.")
+            else:
+                procesar_y_mostrar_resultados()
 
 
 def vista_resultados():
@@ -378,8 +398,7 @@ def vista_resultados():
         def color_score(s):
             styles = []
             for score in s:
-                nivel, color_hex, tag = get_nivel_interpretacion(score)
-                # Solo colorear Alto y Muy Alto (verde) o Bajo y Muy Bajo (rojo/naranja)
+                # Colorear Alto/Muy Alto (Verde) y Bajo/Muy Bajo (Rojo/Naranja)
                 if score >= 60:
                     styles.append('background-color: #2a9d8f; color: white; font-weight: bold;')
                 elif score <= 40:
@@ -397,9 +416,22 @@ def vista_resultados():
         )
 
     st.markdown("---")
+    
+    # --- 2. Roles No Recomendados (Nueva Característica) ---
+    st.header("2. Alerta de Incompatibilidad con Roles Clave 🛑")
+    
+    roles_no_aptos = get_roles_no_recomendados(resultados)
+    
+    if roles_no_aptos:
+        st.error(f"**Cargos NO Recomendados o de Alto Riesgo:** {roles_no_aptos}")
+        st.caption("Esta lista se basa en puntuaciones extremas (Muy Alto o Muy Bajo) que sugieren una incompatibilidad significativa con las demandas típicas de estos roles.")
+    else:
+        st.success("El perfil muestra una gran versatilidad. No se identificaron incompatibilidades significativas para roles clave.")
+        
+    st.markdown("---")
 
-    # --- 2. Análisis Detallado y Recomendaciones (Plan de Desarrollo) ---
-    st.header("2. Análisis Detallado y Plan de Desarrollo Recomendado")
+    # --- 3. Análisis Detallado y Recomendaciones (Plan de Desarrollo) ---
+    st.header("3. Plan de Desarrollo Individual")
     
     for dim in DIMENSIONES_LIST:
         score = resultados[dim]
