@@ -88,18 +88,16 @@ if 'should_scroll' not in st.session_state:
 # --- 2. FUNCIONES DE LÓGICA Y ANÁLISIS ---
 
 def forzar_scroll_al_top():
-    """Función MAXIMAMENTE FORZADA para el scroll al top."""
+    """Función MAXIMAMENTE FORZADA para el scroll al top (usando lógica robusta)."""
+    # No necesita el parámetro 'idx' ya que la lógica lo maneja internamente.
     js_code = """
         <script>
             setTimeout(function() {
                 var topAnchor = window.parent.document.getElementById('top-anchor');
                 if (topAnchor) {
-                    // Si existe el ancla, lo usa
                     topAnchor.scrollIntoView({ behavior: 'auto', block: 'start' });
                 } else {
-                    // Si no, fuerza el scroll en la ventana padre
                     window.parent.scrollTo({ top: 0, behavior: 'auto' });
-                    // Y en el contenedor principal de Streamlit
                     var mainContent = window.parent.document.querySelector('[data-testid="stAppViewContainer"]');
                     if (mainContent) {
                         mainContent.scrollTo({ top: 0, behavior: 'auto' });
@@ -108,7 +106,6 @@ def forzar_scroll_al_top():
             }, 250); 
         </script>
         """
-    # Inyectar el código JavaScript
     st.components.v1.html(js_code, height=0, scrolling=False)
 
 def calcular_resultados(respuestas):
@@ -118,7 +115,9 @@ def calcular_resultados(respuestas):
     for p in PREGUNTAS:
         respuesta = respuestas.get(p['key'])
         
-        if respuesta is None: score = 3
+        # Si la respuesta es None, significa que la validación falló o hubo un error. 
+        # En un test real, esto no debería pasar. Usamos 3 (Neutral) como fallback.
+        if respuesta is None: score = 3 
         elif p['reverse']: score = reverse_score(respuesta) 
         else: score = respuesta
             
@@ -135,11 +134,11 @@ def calcular_resultados(respuestas):
 
 def get_nivel_interpretacion(score):
     """Clasifica el puntaje y retorna un nivel de texto y color corporativo."""
-    if score >= 75: return "Muy Alto", "#2a9d8f", "Dominante" # Verde fuerte
-    elif score >= 60: return "Alto", "#264653", "Marcado" # Azul oscuro
-    elif score >= 40: return "Promedio", "#e9c46a", "Moderado" # Amarillo
-    elif score >= 25: return "Bajo", "#f4a261", "Suave" # Naranja suave
-    else: return "Muy Bajo", "#e76f51", "Recesivo" # Rojo coral
+    if score >= 75: return "Muy Alto", "#2a9d8f", "Dominante"
+    elif score >= 60: return "Alto", "#264653", "Marcado"
+    elif score >= 40: return "Promedio", "#e9c46a", "Moderado"
+    elif score >= 25: return "Bajo", "#f4a261", "Suave"
+    else: return "Muy Bajo", "#e76f51", "Recesivo"
 
 def get_recomendaciones(dim, score):
     """Genera recomendaciones profesionales específicas por dimensión y nivel."""
@@ -223,6 +222,7 @@ def procesar_y_mostrar_resultados():
     st.session_state.should_scroll = True
     with st.spinner('Procesando datos y generando perfil de competencias...'):
         time.sleep(3)
+    # Se asegura de que se calculen los resultados con las respuestas finales
     st.session_state.resultados = calcular_resultados(st.session_state.respuestas)
     st.session_state.stage = 'resultados'
     st.rerun()
@@ -231,6 +231,7 @@ def iniciar_test():
     """Inicia el test en la primera dimensión."""
     st.session_state.stage = 'test_activo'
     st.session_state.current_dimension_index = 0
+    # Reinicia las respuestas para asegurar resultados dinámicos
     st.session_state.respuestas = {p['key']: None for p in PREGUNTAS} 
     st.session_state.resultados = None
     st.session_state.should_scroll = True
@@ -296,6 +297,10 @@ def vista_test_activo():
     
     with st.form(f"form_dim_{current_index}"):
         
+        # Diccionario temporal para guardar las respuestas de este formulario antes de la asignación final
+        # Esto es para evitar problemas de persistencia con el st.radio y el st.form
+        respuestas_form = {} 
+        
         for i, p in enumerate(preguntas_dimension):
             
             with st.container(border=True):
@@ -307,11 +312,12 @@ def vista_test_activo():
                 with col_text:
                     st.markdown(f"**Afirmación:** {p['text']}")
                     
-                    # Recupera el valor actual
+                    # Recupera el valor actual de la sesión
                     initial_value = st.session_state.respuestas.get(p['key'])
                     initial_index = LIKERT_OPTIONS.index(initial_value) if initial_value is not None else None
                     
-                    st.session_state.respuestas[p['key']] = st.radio(
+                    # El valor del radio se guarda en un diccionario temporal al hacer submit
+                    respuestas_form[p['key']] = st.radio(
                         label=f"Respuesta para la pregunta {p['key']}",
                         options=LIKERT_OPTIONS,
                         format_func=lambda x: ESCALA_LIKERT[x],
@@ -330,15 +336,18 @@ def vista_test_activo():
         if submitted:
             # 1. Validar que las 5 preguntas de esta dimensión estén respondidas
             current_dim_answered = True
-            for p in preguntas_dimension:
-                if st.session_state.respuestas.get(p['key']) is None:
+            for key, value in respuestas_form.items():
+                if value is None:
                     current_dim_answered = False
                     break
             
             if not current_dim_answered:
                 st.error(f"🚨 ¡ATENCIÓN! Debe responder **todas las preguntas** de la dimensión actual ({current_dim_name}) antes de continuar.")
             else:
-                # 2. Si todo está respondido, avanzar o finalizar
+                # 2. Persistir las respuestas del formulario en la sesión antes de avanzar/finalizar
+                st.session_state.respuestas.update(respuestas_form)
+                
+                # 3. Avanzar o finalizar
                 if current_index == len(DIMENSIONES_LIST) - 1:
                     procesar_y_mostrar_resultados()
                 else:
@@ -357,6 +366,7 @@ def vista_resultados():
 
     with col_chart:
         st.subheader("1.1 Visualización de Tendencias")
+        # Esta llamada ya no generará NameError
         fig = crear_grafico_radar(resultados)
         st.plotly_chart(fig, use_container_width=True)
         
@@ -436,7 +446,7 @@ def vista_resultados():
     st.button("🔄 Realizar Nueva Evaluación", type="secondary", on_click=reiniciar_test, use_container_width=True)
 
 
-# --- 5. CONTROL DEL FLUJO PRINCIPAL Y SCROLL FORZADO ---
+# --- 5. CONTROL DEL FLUJO PRINCIPAL ---
 
 if st.session_state.stage == 'inicio':
     vista_inicio()
@@ -445,7 +455,7 @@ elif st.session_state.stage == 'test_activo':
 elif st.session_state.stage == 'resultados':
     vista_resultados()
 
-# 6. EJECUCIÓN CONDICIONAL DEL SCROLL
+# --- 6. EJECUCIÓN CONDICIONAL DEL SCROLL ---
 if st.session_state.should_scroll:
     forzar_scroll_al_top()
     # Desactiva la bandera después de ejecutar el scroll
