@@ -440,7 +440,6 @@ def vista_inicio():
 
 def vista_test_activo():
     """Vista del test activo."""
-    forzar_scroll_al_top()
     
     current_index = st.session_state.current_dimension_index
     current_dim_name = DIMENSIONES_LIST[current_index]
@@ -460,7 +459,7 @@ def vista_test_activo():
     preguntas_dimension = [p for p in PREGUNTAS if p['dim'] == current_dim_name]
     
     with st.form(f"form_dim_{current_index}"):
-        st.subheader(f"Responde a las siguientes 10 afirmaciones:")
+        st.subheader("Responde a las siguientes 10 afirmaciones:")
         
         respuestas_form = {}
         
@@ -492,25 +491,24 @@ def vista_test_activo():
         submitted = st.form_submit_button(button_label, type="primary", use_container_width=True)
         
         if submitted:
-            # Validar que todas estén respondidas
             todas_respondidas = all(v is not None for v in respuestas_form.values())
             
             if not todas_respondidas:
-                st.error(f"⚠️ Por favor, responde todas las preguntas de esta dimensión antes de continuar.")
+                st.error("⚠️ Por favor, responde todas las preguntas antes de continuar.")
             else:
-                # Guardar respuestas
                 st.session_state.respuestas.update(respuestas_form)
                 
-                # Avanzar o finalizar
                 if current_index < len(DIMENSIONES_LIST) - 1:
                     st.session_state.current_dimension_index += 1
                     st.rerun()
                 else:
-                    # Calcular resultados
                     st.session_state.resultados = calcular_resultados(st.session_state.respuestas)
                     st.session_state.fecha_evaluacion = datetime.now().strftime("%d/%m/%Y %H:%M")
                     st.session_state.stage = 'resultados'
                     st.rerun()
+    
+    # ✅ Scroll al final, después de renderizar todo
+    forzar_scroll_al_top()
 
 def vista_resultados():
     """Vista de resultados profesional."""
@@ -940,6 +938,7 @@ st.markdown("""
     © 2025 - Herramienta educativa y de orientación | No reemplaza evaluación profesional
 </p>
 """, unsafe_allow_html=True)
+
 
 
 
