@@ -7,30 +7,6 @@ import streamlit.components.v1 as components
 import random
 from datetime import datetime
 
-
-def forzar_scroll_al_top():
-    if "scroll_key" not in st.session_state:
-        st.session_state.scroll_key = 0
-    st.session_state.scroll_key += 1
-
-    js_code = """
-        <script>
-            setTimeout(function() {
-                var topAnchor = window.parent.document.getElementById('top-anchor');
-                if (topAnchor) {
-                    topAnchor.scrollIntoView({ behavior: 'auto', block: 'start' });
-                } else {
-                    window.parent.scrollTo({ top: 0, behavior: 'auto' });
-                    var mainContent = window.parent.document.querySelector('[data-testid="stAppViewContainer"]');
-                    if (mainContent) {
-                        mainContent.scrollTo({ top: 0, behavior: 'auto' });
-                    }
-                }
-            }, 250);
-        </script>
-    """
-    components.html(js_code, height=0, key=f"scroll_{st.session_state.scroll_key}")
-
 # --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
 st.set_page_config(
     layout="wide", 
@@ -177,18 +153,10 @@ if 'scroll_key' not in st.session_state:
 if 'fecha_evaluacion' not in st.session_state:
     st.session_state.fecha_evaluacion = None
 
-# --- 2. FUNCIONES DE SCROLL ---
+# --- 2. FUNCIONES DE SCROLL (DESHABILITADAS) ---
 def forzar_scroll_al_top():
-    """Fuerza el scroll al inicio."""
-    st.session_state.scroll_key += 1
-    js_code = """
-        <script>
-            setTimeout(function() {
-                window.parent.scrollTo({ top: 0, behavior: 'auto' });
-            }, 100);
-        </script>
-    """
-    components.html(js_code, height=0, key=f"scroll_{st.session_state.scroll_key}")
+    """Función deshabilitada para evitar conflictos."""
+    pass  # No hace nada, scroll natural de Streamlit
 
 # --- 3. FUNCIONES DE CÁLCULO ---
 def calcular_resultados(respuestas):
@@ -917,4 +885,3 @@ st.markdown("""
     © 2025 - Herramienta educativa y de orientación | No reemplaza evaluación profesional
 </p>
 """, unsafe_allow_html=True)
-
