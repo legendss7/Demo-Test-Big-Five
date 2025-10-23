@@ -5,6 +5,8 @@ import plotly.graph_objects as go
 import plotly.express as px
 import streamlit.components.v1 as components
 import random
+import streamlit.components.v1 as components
+
 from datetime import datetime
 
 # --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
@@ -15,7 +17,7 @@ st.set_page_config(
 )
 
 # Ancla para scroll
-components.html('<a id="top-anchor"></a>', height=0)
+st.html('<a id="top-anchor"></a>')
 
 # Definición de las dimensiones del Big Five
 DIMENSIONES = {
@@ -906,6 +908,7 @@ st.markdown("""
     © 2025 - Herramienta educativa y de orientación | No reemplaza evaluación profesional
 </p>
 """, unsafe_allow_html=True)
+
 
 
 
