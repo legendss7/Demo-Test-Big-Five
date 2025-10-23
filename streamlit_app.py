@@ -6,6 +6,8 @@ import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
 from math import erf, sqrt
+import base64
+import io
 
 # =========================
 # 0) CONFIGURACIÓN & ESTILO
@@ -18,34 +20,33 @@ st.set_page_config(
 
 CSS = """
 <style>
-/* Base: fondo blanco, tipografía negra */
+/* Base blanco/negro */
 html, body, [data-testid="stAppViewContainer"] { background:#fff !important; color:#111 !important; }
-h1,h2,h3,h4,h5,h6,p,span,div,label { color:#111 !important; }
-
-/* Contenedor responsive más contenido */
 .block-container { padding-top: 0.8rem; max-width: 1200px; }
 
-/* Encabezado corporativo */
+/* Header fijo minimal */
 .header-wrap {
-  position: sticky; top: 0; z-index: 5; background:#fff; border-bottom: 1px solid #eee;
+  position: sticky; top: 0; z-index: 6; background:#fff; border-bottom: 1px solid #eee;
   padding: 10px 6px; margin-bottom: .6rem;
 }
-.header-inner {
-  display:flex; align-items:center; gap: 12px; flex-wrap: wrap;
-}
-.header-logo {
-  width:38px; height:38px; border-radius:8px; object-fit:contain; border:1px solid #eee; background:#fff;
-}
-.header-title {
-  font-weight:800; letter-spacing:.2px; font-size: clamp(16px, 2vw, 18px);
-}
-.header-meta {
-  margin-left:auto; font-size: 12px; color:#444 !important; display:flex; gap:10px; align-items:center;
-}
+.header-inner { display:flex; align-items:center; gap: 12px; flex-wrap: wrap; }
+.header-logo { width:38px; height:38px; border-radius:8px; object-fit:contain; border:1px solid #eee; background:#fff; }
+.header-title { font-weight:800; letter-spacing:.2px; font-size: clamp(16px, 2vw, 18px); }
+.header-meta { margin-left:auto; font-size: 12px; color:#444 !important; display:flex; gap:10px; align-items:center; }
 
 /* Animaciones */
 @keyframes slideUpFade { 0% { transform: translateY(14px); opacity:0;} 100% { transform: translateY(0); opacity:1;} }
 @keyframes pulseSoft { 0% { box-shadow:0 0 0 0 rgba(17,17,17,.20);} 70%{ box-shadow:0 0 0 10px rgba(17,17,17,0);} 100%{ box-shadow:0 0 0 0 rgba(17,17,17,0);} }
+
+/* Hero portada */
+.hero {
+  border:1px solid #eee; border-radius:18px; padding:24px; background:#fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06); animation: slideUpFade .5s ease;
+}
+.hero-title { font-size: clamp(28px, 4.6vw, 40px); font-weight:900; margin:0 0 .3rem 0; }
+.hero-sub { color:#444 !important; margin:0 0 .8rem 0; }
+.step { display:flex; gap:10px; align-items:flex-start; margin:.2rem 0; }
+.step-dot { width:8px; height:8px; border-radius:50%; background:#111; margin-top:.45rem; }
 
 /* Badges & Cards */
 .dim-badge {
@@ -53,10 +54,10 @@ h1,h2,h3,h4,h5,h6,p,span,div,label { color:#111 !important; }
   letter-spacing:.3px; background:#fff; animation: slideUpFade .6s ease;
 }
 .title-animated {
-  font-size: clamp(28px, 5vw, 44px); font-weight: 900; letter-spacing:.3px; margin:.25rem 0 .35rem 0;
-  line-height:1.1; animation: slideUpFade .6s ease;
+  font-size: clamp(22px, 4.8vw, 56px); font-weight: 900; letter-spacing:.3px; margin:.25rem 0 .35rem 0;
+  line-height:1.08; animation: slideUpFade .6s ease;
 }
-.helper { color:#444 !important; margin-top:-.15rem; animation: slideUpFade .8s ease; }
+.qtext { font-size: clamp(16px, 2.4vw, 18px); color:#222 !important; margin-bottom:.6rem; }
 
 /* Pregunta */
 .question-wrap {
@@ -64,14 +65,6 @@ h1,h2,h3,h4,h5,h6,p,span,div,label { color:#111 !important; }
   box-shadow: 0 1px 2px rgba(0,0,0,.06);
   animation: slideUpFade .6s ease;
 }
-
-/* Panel lateral (tarjeta lateral) */
-.sidecard {
-  border:1px solid #eee; border-radius:16px; padding:14px; background:#fff;
-  box-shadow: 0 1px 2px rgba(0,0,0,.04);
-}
-.side-kpi { display:flex; gap:10px; align-items:center; margin:6px 0; }
-.side-dot { width:10px; height:10px; border-radius:50%; background:#111; animation:pulseSoft 2.2s infinite; }
 
 /* KPIs */
 .kpi-big {
@@ -87,7 +80,7 @@ h1,h2,h3,h4,h5,h6,p,span,div,label { color:#111 !important; }
 .subtle { color:#555 !important; }
 hr { border:none; border-top:1px solid #eee; margin:1rem 0; }
 
-/* Cuadro cualitativo */
+/* Cualitativo */
 .qualibox {
   border:1px solid #eee; border-radius:16px; padding:16px; background:#fff; margin-bottom:14px;
 }
@@ -95,37 +88,36 @@ hr { border:none; border-top:1px solid #eee; margin:1rem 0; }
 .qualichips { display:flex; flex-wrap:wrap; gap:6px; margin:.35rem 0 .25rem; }
 .chip { border:1px solid #e9e9e9; border-radius:999px; padding:2px 10px; font-size:12px; }
 
-/* PDF (print) */
+/* Print */
 @media print {
   .stApp header, .stApp footer, [data-testid="stToolbar"], [data-testid="stSidebar"], .viewerBadge_container__1QSob { display:none !important; }
   .block-container { padding: 0 20px !important; max-width: 100% !important; }
   .stPlotlyChart canvas { page-break-inside: avoid; }
   .qualibox, .question-wrap, .kpi-big { break-inside: avoid; }
-  /* Encabezado & pie para PDF */
   .print-header { position: fixed; top: 0; left: 0; right: 0; border-bottom:1px solid #eee; padding:8px 20px; background:#fff; }
   .print-footer { position: fixed; bottom:0; left:0; right:0; border-top:1px solid #eee; padding:6px 20px; font-size:11px; color:#444 !important; background:#fff; }
-  .print-spacer { height: 64px; }           /* espacio bajo encabezado */
-  .print-footer-spacer { height: 42px; }    /* espacio sobre pie */
+  .print-spacer { height: 64px; }
+  .print-footer-spacer { height: 42px; }
 }
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
 
-# =================================
-# 1) CONTROLES CORPORATIVOS (SIDEBAR)
-# =================================
-with st.sidebar:
-    st.markdown("### ⚙️ Configuración")
-    empresa = st.text_input("Nombre de la empresa", value="Tu Empresa S.A.")
-    candidato = st.text_input("Nombre del candidato", value="Candidato/a")
-    puesto = st.text_input("Puesto o área", value="—")
-    logo_file = st.file_uploader("Logo (PNG/JPG)", type=["png", "jpg", "jpeg"])
+# ====================
+# 1) DATOS DE EMPRESA (SIN SIDEBAR)
+# ====================
+if "empresa" not in st.session_state: st.session_state.empresa = "Tu Empresa S.A."
+if "candidato" not in st.session_state: st.session_state.candidato = "Candidato/a"
+if "puesto" not in st.session_state: st.session_state.puesto = "—"
+if "logo_b64" not in st.session_state: st.session_state.logo_b64 = ""
 
-# Guardar logo en session para print
-if "logo_bytes" not in st.session_state:
-    st.session_state.logo_bytes = None
-if logo_file is not None:
-    st.session_state.logo_bytes = logo_file.read()
+def handle_company_form():
+    st.session_state.empresa = st.session_state._empresa
+    st.session_state.candidato = st.session_state._candidato
+    st.session_state.puesto = st.session_state._puesto
+    if st.session_state.get("_logo") is not None:
+        b = st.session_state._logo.read()
+        st.session_state.logo_b64 = base64.b64encode(b).decode()
 
 # ====================
 # 2) MODELO DE DATOS
@@ -267,23 +259,21 @@ def interprete(score):
     return "Muy bajo", "Mínimo"
 
 # ============
-# 5) ENCABEZADO CORPORATIVO (SIEMPRE VISIBLE)
+# 5) ENCABEZADO FIJO (CON LOGO)
 # ============
 logo_html = ""
-if st.session_state.logo_bytes:
-    import base64
-    b64 = base64.b64encode(st.session_state.logo_bytes).decode()
-    logo_html = f"<img class='header-logo' src='data:image/png;base64,{b64}'/>"
+if st.session_state.logo_b64:
+    logo_html = f"<img class='header-logo' src='data:image/png;base64,{st.session_state.logo_b64}'/>"
 
 st.markdown(
     f"""
     <div class="header-wrap">
       <div class="header-inner">
         {logo_html}
-        <div class="header-title">{empresa} — Evaluación Big Five (OCEAN)</div>
+        <div class="header-title">{st.session_state.empresa} — Evaluación Big Five (OCEAN)</div>
         <div class="header-meta">
-            <span>👤 {candidato}</span>
-            <span>💼 {puesto}</span>
+            <span>👤 {st.session_state.candidato}</span>
+            <span>💼 {st.session_state.puesto}</span>
         </div>
       </div>
     </div>
@@ -294,12 +284,38 @@ st.markdown(
 # ============
 # 6) PANTALLAS
 # ============
-def pantalla_inicio():
-    st.title("Test de Personalidad Big Five (OCEAN)")
-    st.write("Responde **50 afirmaciones** (escala 1–5). El test **avanza automáticamente** al elegir cada alternativa.")
-    st.write("El diseño es **responsivo** y la exportación a **PDF** incluye tu logo, empresa, candidato y fecha.")
+def portada():
+    # Hero
+    st.markdown("<div class='hero'>", unsafe_allow_html=True)
+    st.markdown("<div class='hero-title'>Evaluación de Personalidad Big Five (OCEAN)</div>", unsafe_allow_html=True)
+    st.markdown("<div class='hero-sub'>Herramienta profesional para selección y desarrollo. Responde 50 afirmaciones en escala 1–5. Auto-avance activado.</div>", unsafe_allow_html=True)
 
-    # Tarjetas de dimensiones
+    c1, c2 = st.columns([2,1], vertical_alignment="top")
+    with c1:
+        st.markdown("**Cómo funciona**")
+        for t in [
+            "Lee la afirmación y elige la opción que mejor te represente.",
+            "Avanzas automáticamente al seleccionar la alternativa.",
+            "Al terminar, verás un informe con KPIs, gráficos y análisis.",
+        ]:
+            st.markdown(f"<div class='step'><div class='step-dot'></div><div>{t}</div></div>", unsafe_allow_html=True)
+
+    with c2:
+        st.markdown("**Datos del informe**")
+        with st.form("company_form"):
+            st.text_input("Empresa", key="_empresa", value=st.session_state.empresa)
+            st.text_input("Candidato/a", key="_candidato", value=st.session_state.candidato)
+            st.text_input("Puesto / Área", key="_puesto", value=st.session_state.puesto)
+            st.file_uploader("Logo (PNG/JPG)", type=["png","jpg","jpeg"], key="_logo")
+            submitted = st.form_submit_button("Guardar datos")
+            if submitted:
+                handle_company_form()
+                st.success("Datos guardados.")
+
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("---")
+
+    # Dimensiones en tarjetas
     c1, c2, c3, c4, c5 = st.columns(5)
     cols = [c1, c2, c3, c4, c5]
     for i, d in enumerate(DIM_LIST):
@@ -309,90 +325,117 @@ def pantalla_inicio():
                 unsafe_allow_html=True
             )
 
-    st.markdown("---")
-    # Panel lateral (tarjeta) + botón comenzar
-    left, right = st.columns([2,1])
-    with left:
-        st.markdown("**Instrucciones**")
-        st.markdown("- Marca la opción que mejor te represente en cada afirmación.")
-        st.markdown("- Al seleccionar, pasarás automáticamente a la siguiente pregunta.")
-        st.markdown("- Puedes revisar el **progreso** en la tarjeta lateral.")
-    with right:
-        st.markdown("<div class='sidecard'>", unsafe_allow_html=True)
-        st.markdown("**Tarjeta Lateral**")
-        st.markdown("<div class='side-kpi'><div class='side-dot'></div> Preguntas: 50</div>", unsafe_allow_html=True)
-        st.markdown("<div class='side-kpi'><div class='side-dot'></div> Tiempo estimado: 8–12 min</div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-        if st.button("🚀 Comenzar ahora", type="primary", use_container_width=True):
-            st.session_state.stage = "test"
-            st.session_state.started_at = datetime.now().strftime("%Y-%m-%d %H:%M")
-            st.rerun()
+    st.markdown("")
+    if st.button("🚀 Comenzar evaluación", type="primary", use_container_width=True):
+        st.session_state.stage = "test"
+        st.session_state.started_at = datetime.now().strftime("%Y-%m-%d %H:%M")
+        st.rerun()
 
-def pantalla_test_autonav():
+def handle_choice(qkey):
+    # Guardamos respuesta elegida
+    chosen = st.session_state.get(f"radio_{qkey}", None)
+    if chosen is not None:
+        st.session_state.answers[qkey] = chosen
+    # Auto-avance + scroll top
+    total = len(PREGUNTAS)
+    if st.session_state.q_index < total - 1:
+        st.session_state.q_index += 1
+        st.markdown("<script>window.parent.scrollTo({top:0,behavior:'auto'});</script>", unsafe_allow_html=True)
+        st.rerun()
+    else:
+        go_results()
+        st.rerun()
+
+def pantalla_test():
     q = current_question()
     idx = st.session_state.q_index
     total = len(PREGUNTAS)
 
-    left, right = st.columns([3,1], gap="medium")
+    st.markdown(f"<div class='dim-badge'>{DIMENSIONES[q['dim']]['icon']} {DIMENSIONES[q['dim']]['code']} — {q['dim']}</div>", unsafe_allow_html=True)
+    # Dimensión gigante
+    st.markdown(f"<div class='title-animated'>{q['dim']}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='qtext'>Pregunta {idx+1} de {total}: {q['text']}</div>", unsafe_allow_html=True)
 
-    with left:
-        st.markdown(f"<div class='dim-badge'>{DIMENSIONES[q['dim']]['icon']} {DIMENSIONES[q['dim']]['code']} — {q['dim']}</div>", unsafe_allow_html=True)
-        st.markdown(f"<div class='title-animated'>Pregunta {idx+1} de {total}</div>", unsafe_allow_html=True)
-        st.markdown(f"<div class='helper'>{q['text']}</div>", unsafe_allow_html=True)
+    st.markdown("<div class='question-wrap'>", unsafe_allow_html=True)
+    # Valor actual si lo hubo
+    current_val = st.session_state.answers.get(q["key"], None)
 
-        st.markdown("<div class='question-wrap'>", unsafe_allow_html=True)
+    # Radio con callback robusto
+    st.radio(
+        "Tu respuesta",
+        options=LIKERT,
+        index=(LIKERT.index(current_val) if current_val in LIKERT else None),
+        format_func=lambda k: f"{k} — {LIKERT_LABELS[k]}",
+        key=f"radio_{q['key']}",
+        horizontal=True,
+        label_visibility="collapsed",
+        on_change=lambda: handle_choice(q["key"])
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
 
-        def _on_select():
-            # avanzar automáticamente y subir scroll
-            if st.session_state.q_index < total - 1:
-                st.session_state.q_index += 1
-                st.markdown("<script>window.parent.scrollTo({top:0,behavior:'auto'});</script>", unsafe_allow_html=True)
-                st.rerun()
-            else:
-                go_results()
-                st.rerun()
+    pct = int((idx / total) * 100)
+    st.progress(pct/100, text=f"Progreso: {idx}/{total} ({pct}%)")
 
-        current_val = st.session_state.answers.get(q["key"], None)
-        st.radio(
-            "Tu respuesta",
-            options=LIKERT,
-            index=(LIKERT.index(current_val) if current_val in LIKERT else None),
-            format_func=lambda k: f"{k} — {LIKERT_LABELS[k]}",
-            key=f"radio_{q['key']}",
-            horizontal=True,
-            label_visibility="collapsed",
-            on_change=lambda: (
-                st.session_state.answers.__setitem__(q["key"], st.session_state[f"radio_{q['key']}"]),
-                _on_select()
-            )
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
+def build_report_html(scores, empresa, candidato, puesto, logo_b64):
+    # Construye un HTML imprimible (para descargar), sin dependencias externas
+    order = list(scores.keys())
+    values = [scores[d] for d in order]
+    # tabla simple
+    rows = "".join(
+        f"<tr><td>{d}</td><td style='text-align:right'>{scores[d]:.1f}</td></tr>"
+        for d in order
+    )
+    logo_html = f"<img style='height:40px' src='data:image/png;base64,{logo_b64}'>" if logo_b64 else ""
+    html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Informe Big Five</title>
+<style>
+body {{ font-family: Arial, sans-serif; color:#111; }}
+.container {{ max-width: 960px; margin: 0 auto; padding: 20px; }}
+.header {{ display:flex; align-items:center; gap:10px; border-bottom:1px solid #eee; padding-bottom:8px; margin-bottom:16px; }}
+h1 {{ margin:.2rem 0; }}
+.kpis {{ display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; margin:14px 0; }}
+.kpi {{ border:1px solid #eee; border-radius:12px; padding:12px; }}
+table {{ width:100%; border-collapse: collapse; margin-top:10px; }}
+td, th {{ border-bottom:1px solid #eee; padding:8px; }}
+.footer {{ border-top:1px solid #eee; margin-top:20px; padding-top:10px; font-size:12px; color:#444; }}
+</style>
+</head>
+<body>
+<div class="container" id="report">
+  <div class="header">{logo_html}
+    <div>
+      <div style="font-weight:800">{empresa} — Informe Big Five (OCEAN)</div>
+      <div style="font-size:12px;color:#444">Candidato: <b>{candidato}</b> | Puesto: <b>{puesto}</b> | Fecha: <b>{datetime.now().strftime('%Y-%m-%d')}</b></div>
+    </div>
+  </div>
+  <h1>Resumen</h1>
+  <div class="kpis">
+    <div class="kpi"><div style="font-size:12px;color:#666">Promedio global</div><div style="font-weight:800;font-size:20px">{np.mean(values):.1f}</div></div>
+    <div class="kpi"><div style="font-size:12px;color:#666">Desviación estándar</div><div style="font-weight:800;font-size:20px">{np.std(values, ddof=1):.2f}</div></div>
+    <div class="kpi"><div style="font-size:12px;color:#666">Dimensión más alta</div><div style="font-weight:800;font-size:20px">{max(scores, key=scores.get)}</div></div>
+    <div class="kpi"><div style="font-size:12px;color:#666">Dimensión más baja</div><div style="font-weight:800;font-size:20px">{min(scores, key=scores.get)}</div></div>
+  </div>
+  <h2>Puntuaciones</h2>
+  <table><tbody>{rows}</tbody></table>
 
-        pct = int((idx / total) * 100)
-        st.progress(pct/100, text=f"Progreso: {idx}/{total} ({pct}%)")
-
-    with right:
-        st.markdown("<div class='sidecard'>", unsafe_allow_html=True)
-        st.markdown("**Tarjeta Lateral**")
-        st.markdown(f"<div class='side-kpi'><div class='side-dot'></div> Dimensión actual:<br><b>{q['dim']}</b></div>", unsafe_allow_html=True)
-        st.markdown(f"<div class='side-kpi'><div class='side-dot'></div> Pregunta <b>{idx+1}</b> / {total}</div>", unsafe_allow_html=True)
-        st.markdown(f"<div class='side-kpi'><div class='side-dot'></div> Candidato:<br><b>{candidato}</b></div>", unsafe_allow_html=True)
-        st.markdown(f"<div class='side-kpi'><div class='side-dot'></div> Puesto:<br><b>{puesto}</b></div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+  <div class="footer">{empresa} • Big Five • {candidato} • {datetime.now().strftime('%Y-%m-%d')}</div>
+</div>
+</body></html>"""
+    return html.encode("utf-8")
 
 def pantalla_resultados():
     scores = compute_scores(st.session_state.answers)
     order = list(scores.keys())
     values = [scores[d] for d in order]
 
-    # Encabezado/Pie impresión (solo en print)
+    # Encabezado/Pie para impresión en navegador
     st.markdown(
         f"""
         <div class='print-header'>
           <div style="display:flex;align-items:center;gap:10px;">
-            <div style="font-weight:800;">{empresa} — Informe Big Five</div>
+            <div style="font-weight:800;">{st.session_state.empresa} — Informe Big Five</div>
             <div style="margin-left:auto;font-size:12px;color:#444;">
-              Candidato: <b>{candidato}</b> &nbsp;|&nbsp; Puesto: <b>{puesto}</b> &nbsp;|&nbsp; Fecha: <b>{datetime.now().strftime('%Y-%m-%d')}</b>
+              Candidato: <b>{st.session_state.candidato}</b> &nbsp;|&nbsp; Puesto: <b>{st.session_state.puesto}</b> &nbsp;|&nbsp; Fecha: <b>{datetime.now().strftime('%Y-%m-%d')}</b>
             </div>
           </div>
         </div>
@@ -403,7 +446,7 @@ def pantalla_resultados():
 
     st.markdown("<div id='report-root'>", unsafe_allow_html=True)
 
-    # KPIs superiores
+    # KPIs
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         st.markdown("<div class='kpi-big'><div class='kpi-dot'></div><div><div class='kpi-title'>Promedio global</div><div class='kpi-value'>"+f"{np.mean(values):.1f} / 100"+"</div></div></div>", unsafe_allow_html=True)
@@ -418,10 +461,9 @@ def pantalla_resultados():
 
     # Visualizaciones
     st.markdown("<div class='section-title'>Visualizaciones del perfil</div>", unsafe_allow_html=True)
-
     # Radar
     fig_radar = go.Figure()
-    fig_radar.add_trace(go.Scatterpolar(
+    fig_radar.add_trace(go.Scat terpolar(
         r=values,
         theta=[f"{DIMENSIONES[d]['code']} {d}" for d in order],
         fill='toself', name='Perfil',
@@ -455,7 +497,6 @@ def pantalla_resultados():
     MU, SIG = 50, 15
     def z(x): return (x - MU) / SIG
     def cdf_norm(x): return 0.5 * (1 + erf(x / sqrt(2)))
-
     rows = []
     for d in DIM_LIST:
         s = scores[d]; Z = z(s); pct = round(cdf_norm(Z) * 100, 1)
@@ -466,7 +507,7 @@ def pantalla_resultados():
 
     st.markdown("<hr/>", unsafe_allow_html=True)
 
-    # Análisis cualitativo — estructura (Fortalezas / Alertas / Cargos)
+    # Análisis cualitativo
     st.markdown("<div class='section-title'>Análisis cualitativo por dimensión</div>", unsafe_allow_html=True)
     QUALI = {
         "Apertura a la Experiencia": {
@@ -516,53 +557,55 @@ def pantalla_resultados():
                 st.markdown("**Posibles cargos**")
                 cargos = QUALI[d]["roles_altos"] if high else QUALI[d]["roles_bajos"]
                 st.markdown("<div class='qualichips'>" + "".join([f"<span class='chip'>💼 {x}</span>" for x in cargos]) + "</div>", unsafe_allow_html=True)
-            st.markdown(
-                "<div class='small subtle'>Recomendación: ajusta entorno y procesos para potenciar fortalezas y mitigar riesgos específicos de esta dimensión.</div>",
-                unsafe_allow_html=True
-            )
+            st.caption("Recomendación: alinear entorno, funciones y herramientas para potenciar fortalezas y mitigar riesgos.")
 
     st.markdown("<hr/>", unsafe_allow_html=True)
 
     # Exportar
-    st.markdown("<div class='section-title'>Exportar</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-title'>Exportar informe</div>", unsafe_allow_html=True)
     export_df = pd.DataFrame({"Dimensión": order, "Puntuación": values})
     csv_bytes = export_df.to_csv(index=False).encode("utf-8")
-    c1, c2 = st.columns([1,2])
+
+    c1, c2, c3 = st.columns([1,1,2])
     with c1:
         st.download_button(
-            "📄 Descargar CSV",
+            "📄 CSV",
             data=csv_bytes,
             file_name=f"BigFive_Resultados_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
             mime="text/csv",
             use_container_width=True
         )
     with c2:
-        st.markdown(
-            """
-            <div class='qualibox'>
-              <b>PDF del informe:</b> pulsa el botón y en el diálogo del navegador elige <i>Guardar como PDF</i>.
-            </div>
-            """, unsafe_allow_html=True
+        # HTML imprimible (si el navegador bloquea el print directo)
+        html_bytes = build_report_html(
+            scores,
+            st.session_state.empresa,
+            st.session_state.candidato,
+            st.session_state.puesto,
+            st.session_state.logo_b64
         )
-        if st.button("🖨️ Descargar PDF del informe", use_container_width=True):
+        st.download_button(
+            "🧾 HTML imprimible",
+            data=html_bytes,
+            file_name=f"BigFive_Informe_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+            mime="text/html",
+            use_container_width=True
+        )
+    with c3:
+        if st.button("🖨️ Guardar como PDF (imprimir)", use_container_width=True):
             st.markdown(
-                """
-                <script>
-                window.setTimeout(function(){
-                  window.print();
-                }, 120);
-                </script>
-                """, unsafe_allow_html=True
+                "<script>window.setTimeout(function(){ window.print(); }, 100);</script>",
+                unsafe_allow_html=True
             )
 
     st.markdown("</div>", unsafe_allow_html=True)  # report-root
 
-    # Pie fijo para impresión
+    # Pie para impresión
     st.markdown(
         f"""
         <div class='print-footer-spacer'></div>
         <div class='print-footer'>
-          {empresa} • Big Five • {candidato} • {datetime.now().strftime('%Y-%m-%d')}
+          {st.session_state.empresa} • Big Five • {st.session_state.candidato} • {datetime.now().strftime('%Y-%m-%d')}
         </div>
         """,
         unsafe_allow_html=True
@@ -577,8 +620,8 @@ def pantalla_resultados():
 # 7) ROUTER
 # ============
 if st.session_state.stage == "inicio":
-    pantalla_inicio()
+    portada()
 elif st.session_state.stage == "test":
-    pantalla_test_autonav()
+    pantalla_test()
 else:
     pantalla_resultados()
