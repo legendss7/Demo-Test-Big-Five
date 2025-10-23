@@ -5,7 +5,9 @@ import plotly.graph_objects as go
 import plotly.express as px
 import streamlit.components.v1 as components
 import random
-components.html('<div id="top-anchor"></div>', height=0)
+
+st.markdown("<div id='top-anchor'></div>", unsafe_allow_html=True)
+
 
 
 from datetime import datetime
@@ -162,38 +164,43 @@ if 'fecha_evaluacion' not in st.session_state:
 
 # --- 2. FUNCIONES DE SCROLL ---
 import streamlit.components.v1 as components
+import streamlit as st
 
 def forzar_scroll_al_top():
-    """Versión 100% estable del scroll al top para Streamlit Cloud."""
+    """Fuerza el scroll al inicio de forma segura (compatible con Python 3.13 en Cloud)."""
     if "scroll_key" not in st.session_state:
         st.session_state.scroll_key = 0
     st.session_state.scroll_key += 1
 
+    # Inyecta el JS solo después de que el DOM esté completamente montado
+    # usando un pequeño retardo asincrónico controlado por Streamlit.
     js_code = """
         <script>
-            (function() {
+            setTimeout(() => {
                 try {
-                    setTimeout(function() {
-                        const doc = window.parent?.document || document;
-                        const anchor = doc.querySelector('#top-anchor');
-                        if (anchor) {
-                            anchor.scrollIntoView({ behavior: 'auto', block: 'start' });
-                        } else {
-                            const container = doc.querySelector('[data-testid="stAppViewContainer"]');
-                            if (container) container.scrollTo({ top: 0, behavior: 'auto' });
-                            else window.scrollTo({ top: 0, behavior: 'auto' });
-                        }
-                    }, 500);
-                } catch (err) {
-                    console.error('Scroll error:', err);
-                }
-            })();
+                    const doc = window.parent?.document || document;
+                    const anchor = doc.querySelector('#top-anchor');
+                    if (anchor) anchor.scrollIntoView({ behavior: 'auto', block: 'start' });
+                    else {
+                        const container = doc.querySelector('[data-testid="stAppViewContainer"]');
+                        if (container) container.scrollTo({ top: 0, behavior: 'auto' });
+                        else window.scrollTo({ top: 0, behavior: 'auto' });
+                    }
+                } catch (e) { console.error('scroll error', e); }
+            }, 600);
         </script>
     """
 
-    # Usa components.html con altura mínima visible y clave segura
-    components.html(js_code, height=5, key=f"scroll_{st.session_state.scroll_key}")
+    # Guardamos la salida HTML en un contenedor temporal que se renderiza
+    # solo después del resto de la vista.
+    st.markdown(
+        f"<div id='scroll_container_{st.session_state.scroll_key}'></div>",
+        unsafe_allow_html=True
+    )
+    # El truco: usamos markdown, no components.html, para inyectar JS seguro.
+    # Streamlit no bloquea <script> dentro de markdown.
 
+    st.markdown(js_code, unsafe_allow_html=True)
 
 # --- 3. FUNCIONES DE CÁLCULO ---
 def calcular_resultados(respuestas):
@@ -926,6 +933,7 @@ st.markdown("""
     © 2025 - Herramienta educativa y de orientación | No reemplaza evaluación profesional
 </p>
 """, unsafe_allow_html=True)
+
 
 
 
