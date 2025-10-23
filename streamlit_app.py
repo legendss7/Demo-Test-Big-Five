@@ -23,7 +23,7 @@ st.set_page_config(
 )
 
 # Ancla para scroll
-components.html('<a id="top-anchor"></a>', height=0)
+
 
 
 # Definición de las dimensiones del Big Five
@@ -167,40 +167,29 @@ import streamlit.components.v1 as components
 import streamlit as st
 
 def forzar_scroll_al_top():
-    """Fuerza el scroll al inicio de forma segura (compatible con Python 3.13 en Cloud)."""
-    if "scroll_key" not in st.session_state:
-        st.session_state.scroll_key = 0
-    st.session_state.scroll_key += 1
-
-    # Inyecta el JS solo después de que el DOM esté completamente montado
-    # usando un pequeño retardo asincrónico controlado por Streamlit.
+    """Fuerza el scroll al inicio de forma universal (compatible con Streamlit Cloud)."""
     js_code = """
         <script>
+            // Espera un poco a que todo el contenido se monte antes de mover el scroll
             setTimeout(() => {
                 try {
-                    const doc = window.parent?.document || document;
-                    const anchor = doc.querySelector('#top-anchor');
-                    if (anchor) anchor.scrollIntoView({ behavior: 'auto', block: 'start' });
-                    else {
-                        const container = doc.querySelector('[data-testid="stAppViewContainer"]');
-                        if (container) container.scrollTo({ top: 0, behavior: 'auto' });
-                        else window.scrollTo({ top: 0, behavior: 'auto' });
-                    }
-                } catch (e) { console.error('scroll error', e); }
-            }, 600);
+                    // Contenedor principal
+                    const appView = window.parent.document.querySelector('[data-testid="stAppViewContainer"]');
+                    // Scroll principal
+                    if (appView) appView.scrollTo({ top: 0, behavior: 'auto' });
+                    // Sidebar
+                    const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+                    if (sidebar) sidebar.scrollTo({ top: 0, behavior: 'auto' });
+                    // Ventana completa
+                    window.parent.scrollTo({ top: 0, behavior: 'auto' });
+                } catch (err) {
+                    console.error('Scroll error:', err);
+                }
+            }, 500); // Espera medio segundo para asegurar render completo
         </script>
     """
-
-    # Guardamos la salida HTML en un contenedor temporal que se renderiza
-    # solo después del resto de la vista.
-    st.markdown(
-        f"<div id='scroll_container_{st.session_state.scroll_key}'></div>",
-        unsafe_allow_html=True
-    )
-    # El truco: usamos markdown, no components.html, para inyectar JS seguro.
-    # Streamlit no bloquea <script> dentro de markdown.
-
     st.markdown(js_code, unsafe_allow_html=True)
+
 
 # --- 3. FUNCIONES DE CÁLCULO ---
 def calcular_resultados(respuestas):
@@ -385,7 +374,7 @@ def reiniciar_test():
 # --- 6. VISTAS ---
 
 # Ancla superior: usa markdown, no components.html
-st.markdown("<div id='top-anchor'></div>", unsafe_allow_html=True)
+
 
 def vista_inicio():
     """Vista de inicio."""
@@ -435,7 +424,7 @@ def vista_inicio():
             st.rerun()
     
     # --- Scroll al inicio (llamar al final, no dentro de los botones) ---
-    forzar_scroll_al_top()
+      forzar_scroll_al_top()
 
 
 def vista_test_activo():
@@ -526,6 +515,7 @@ def vista_resultados():
     st.title("📊 Tu Informe de Personalidad Big Five")
     st.markdown(f"**Fecha de Evaluación:** {st.session_state.fecha_evaluacion}")
     st.markdown("---")
+      forzar_scroll_al_top()
     
     # --- 1. RESUMEN EJECUTIVO ---
     st.header("1. 📈 Resumen Ejecutivo")
@@ -938,6 +928,7 @@ st.markdown("""
     © 2025 - Herramienta educativa y de orientación | No reemplaza evaluación profesional
 </p>
 """, unsafe_allow_html=True)
+
 
 
 
