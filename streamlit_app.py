@@ -28,30 +28,24 @@ st.set_page_config(
 # ------------------ THEME / CSS ------------------
 st.markdown("""
 <style>
-/* Fondo oscuro ejecutivo */
 [data-testid="stAppViewContainer"] {
-  background: #0f172a; /* slate-900 */
-  color: #e2e8f0;      /* slate-200 */
+  background: #ffffff;
+  color: #000000;
 }
 [data-testid="stHeader"] {background: rgba(0,0,0,0);}
-section.main > div {padding-top: 1.5rem;}
-hr {border-top: 1px solid #334155;}
-.block {background: #111827; border: 1px solid #1f2937; border-radius: 14px; padding: 18px 20px; box-shadow: 0 10px 25px rgba(0,0,0,.25);}
-h1, h2, h3 { color: #e2e8f0; }
-.small {color:#94a3b8; font-size:.95rem;}
-.kpi {
-  background: linear-gradient(135deg,#0ea5e9 0%, #2563eb 100%);
-  border-radius: 16px; padding: 22px; color: white; text-align:center; 
-  box-shadow: 0 18px 40px rgba(37,99,235,.25);
+hr {border-top: 1px solid #e0e0e0;}
+h1, h2, h3, h4 { color: #111111; }
+.block {
+  background: #fafafa; border: 1px solid #ddd; border-radius: 12px;
+  padding: 18px 20px; box-shadow: 0 4px 10px rgba(0,0,0,.05);
 }
 button[kind="primary"] {
-  background: linear-gradient(135deg,#0ea5e9 0%, #2563eb 100%) !important;
-  border: none !important;
+  background-color: #1a73e8 !important;
+  color: white !important;
 }
-/* Radios compactos */
-div[role="radiogroup"] > label {background:#0b1220; border:1px solid #1f2937; border-radius:10px; padding:6px 10px; margin:4px;}
 </style>
 """, unsafe_allow_html=True)
+
 
 # ------------------ CONSTANTES ------------------
 DIMENSIONES = {
@@ -255,82 +249,72 @@ def reiniciar():
     st.session_state.fecha_evaluacion = None
 
 # ------------------ PDF GENERATION ------------------
-def generar_pdf(empresa, fecha, resultados, df_resumen, recomendaciones, logo_bytes=None) -> bytes:
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import cm
+from reportlab.lib import colors
+from io import BytesIO
+from PIL import Image
+
+def generar_pdf(empresa, fecha, resultados, recomendaciones, logo_bytes=None) -> bytes:
+    """Genera un PDF simple y funcional sin errores de ReportLab."""
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     W, H = A4
-    margin = 2*cm
+    margin = 2 * cm
 
-    # Header
+    # Logo si se subió
     if logo_bytes:
         try:
             img = Image.open(BytesIO(logo_bytes))
-            img_w = 3.5*cm
             aspect = img.height / img.width
-            img_h = img_w * aspect
-            img = img.convert("RGB")
+            w = 3.5 * cm
+            h = w * aspect
             tmp = BytesIO()
             img.save(tmp, format="PNG")
             tmp.seek(0)
-            c.drawImage(tmp, margin, H - margin - img_h, width=img_w, height=img_h, mask='auto')
+            c.drawImage(tmp, margin, H - margin - h, width=w, height=h, mask='auto')
         except Exception:
             pass
 
-    c.setFillColor(colors.HexColor("#111827"))
-    c.setFont("Helvetica-Bold", 16)
-    c.drawRightString(W - margin, H - margin, f"Informe Big Five - {empresa}")
-    c.setFont("Helvetica", 10)
-    c.drawRightString(W - margin, H - margin - 14, f"Fecha: {fecha}")
-
-    # Summary box
-    c.setFillColor(colors.HexColor("#2563eb"))
-    c.roundRect(margin, H - 5*cm, W - 2*margin, 2.6*cm, 12, fill=1, stroke=0)
-    c.setFillColor(colors.white)
+    # Encabezado
     c.setFont("Helvetica-Bold", 14)
-    c.drawString(margin + 0.6*cm, H - 3.2*cm, "Resumen Ejecutivo")
-    prom = np.mean(list(resultados.values()))
-    c.setFont("Helvetica", 11)
-    c.drawString(margin + 0.6*cm, H - 3.7*cm, f"Puntuación promedio global: {prom:.1f}/100")
-    c.drawString(margin + 0.6*cm, H - 4.2*cm, "Interpretación: Perfil orientativo para uso de RRHH.")
-
-    # Tabla de resultados (simple lista)
-    c.setFillColor(colors.black)
-    c.setFont("Helvetica-Bold", 12)
-    y = H - 6*cm
-    c.drawString(margin, y, "Resultados por Dimensión")
-    y -= 0.5*cm
+    c.drawRightString(W - margin, H - margin, f"Informe Big Five — {empresa}")
     c.setFont("Helvetica", 10)
+    c.drawRightString(W - margin, H - margin - 12, f"Fecha: {fecha}")
+
+    # Título
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(margin, H - 4*cm, "Resultados Generales")
+    c.setFont("Helvetica", 11)
+
+    y = H - 5*cm
     for dim, score in resultados.items():
-        nivel, _, etiqueta = nivel_interpretacion(score)
-        c.drawString(margin, y, f"- {dim}: {score:.1f} / 100  |  {nivel} ({etiqueta})")
-        y -= 0.45*cm
-        if y < 3*cm:
+        c.drawString(margin, y, f"{dim}: {score:.1f}/100")
+        y -= 0.5 * cm
+        if y < 3 * cm:
             c.showPage()
             y = H - margin
-            c.setFont("Helvetica", 10)
 
-    # Recomendaciones
-    c.setFont("Helvetica-Bold", 12)
-    y -= 0.2*cm
-    c.drawString(margin, y, "Roles Profesionales Sugeridos")
-    y -= 0.5*cm
-    c.setFont("Helvetica", 10)
-    for r in recomendaciones:
-        for line in Paragraph(r, ParagraphStyle(name="p", fontName="Helvetica", fontSize=10, leading=13, alignment=TA_LEFT)).breakLines(W - 2*margin):
-            c.drawString(margin, y, f"- {line.text}")
-            y -= 0.42*cm
-            if y < 2.5*cm:
-                c.showPage()
-                y = H - margin
-                c.setFont("Helvetica", 10)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(margin, y - 1*cm, "Roles Profesionales Sugeridos")
+    c.setFont("Helvetica", 11)
+    y -= 1.5 * cm
+    for rec in recomendaciones:
+        c.drawString(margin, y, f"- {rec}")
+        y -= 0.5 * cm
+        if y < 3 * cm:
+            c.showPage()
+            y = H - margin
 
     # Footer
     c.setFont("Helvetica-Oblique", 8)
-    c.setFillColor(colors.HexColor("#6b7280"))
-    c.drawString(margin, 1.5*cm, "Este informe es orientativo y no sustituye una evaluación psicométrica administrada por profesionales.")
+    c.setFillColor(colors.gray)
+    c.drawString(margin, 1.5*cm, "Este informe es orientativo. No sustituye una evaluación profesional.")
     c.save()
     buffer.seek(0)
     return buffer.read()
+
 
 # ------------------ VISTAS ------------------
 def vista_inicio():
@@ -573,7 +557,6 @@ def vista_resultados():
                 empresa=empresa,
                 fecha=st.session_state.fecha_evaluacion,
                 resultados=resultados,
-                df_resumen=df_res,
                 recomendaciones=sugerencias,
                 logo_bytes=logo_bytes
             )
@@ -602,3 +585,4 @@ st.markdown(
     "<p style='text-align:center;color:#64748b;'>© 2025 · Suite RRHH · Big Five (OCEAN) — Dashboard Corporativo</p>",
     unsafe_allow_html=True
 )
+
