@@ -3,7 +3,8 @@ import pandas as pd
 import numpy as np
 import time
 import plotly.graph_objects as go
-import streamlit.components.v1 as components
+import streamlit.components.v1 as components 
+import random # Necesario para las respuestas aleatorias
 
 # --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
 st.set_page_config(layout="wide", page_title="Evaluación Big Five | Perfil Corporativo")
@@ -89,7 +90,6 @@ if 'should_scroll' not in st.session_state:
 
 def forzar_scroll_al_top():
     """Función MAXIMAMENTE FORZADA para el scroll al top (usando lógica robusta)."""
-    # No necesita el parámetro 'idx' ya que la lógica lo maneja internamente.
     js_code = """
         <script>
             setTimeout(function() {
@@ -115,8 +115,7 @@ def calcular_resultados(respuestas):
     for p in PREGUNTAS:
         respuesta = respuestas.get(p['key'])
         
-        # Si la respuesta es None, significa que la validación falló o hubo un error. 
-        # En un test real, esto no debería pasar. Usamos 3 (Neutral) como fallback.
+        # Usamos 3 (Neutral) como fallback si no hay respuesta (aunque el flujo debe evitar esto)
         if respuesta is None: score = 3 
         elif p['reverse']: score = reverse_score(respuesta) 
         else: score = respuesta
@@ -145,17 +144,17 @@ def get_recomendaciones(dim, score):
     nivel_map = get_nivel_interpretacion(score)[0]
     
     rec = {
-        "Apertura a la Experiencia (O)": {"Muy Alto": "Fomentar roles de **innovación, I+D y diseño estratégico**. Se adaptará bien a cambios y proyectos creativos.", "Bajo": "Ubicar en tareas con **procedimientos claros y poca ambigüedad**. Puede requerir entrenamiento para manejar el cambio o nuevas tecnologías.", "Promedio": "Apto para roles que requieren un balance entre **estabilidad y creatividad**. Fomentar la participación en grupos de mejora continua."},
-        "Responsabilidad (C)": {"Muy Alto": "Asignar funciones de **auditoría, gestión de proyectos y roles críticos** donde la precisión es vital. Excelente autogestión.", "Bajo": "Evitar roles que demanden alta autonomía en la planificación. Necesita **seguimiento estructurado y objetivos a corto plazo**.", "Promedio": "Capaz de mantener la **disciplina en roles definidos**. Potenciar con herramientas de planificación y gestión del tiempo."},
-        "Extraversión (E)": {"Muy Alto": "Ideal para **ventas, liderazgo de equipos y networking corporativo**. Prospera en ambientes sociales y le gusta influir.", "Bajo": "Apto para roles de **análisis profundo, desarrollo individual y especialistas técnicos**. Requiere un ambiente de trabajo tranquilo y enfocado.", "Promedio": "Perfil **adaptable**; puede funcionar bien en equipos y en tareas solitarias. Entrenar en habilidades de presentación y comunicación."},
-        "Amabilidad (A)": {"Muy Alto": "Excelente para **recursos humanos, servicio al cliente y resolución de conflictos**. Promueve un clima laboral positivo.", "Bajo": "Ubicar en posiciones que requieran **negociación dura o toma de decisiones complejas** sin sesgo emocional. Puede tener dificultades en la cohesión de equipos.", "Promedio": "Buen colaborador. Fomentar el **liderazgo servicial y la mediación** en situaciones grupales."},
-        "Neuroticismo (N)": {"Muy Alto": "Requiere **soporte de bienestar emocional y un ambiente laboral de baja presión**. Evaluar el impacto del estrés en el rendimiento.", "Bajo": "Es un perfil **resiliente y estable**. Ideal para roles bajo presión constante (ej. operaciones críticas, manejo de crisis).", "Promedio": "Muestra **buena gestión emocional, pero puede fluctuar**. Ofrecer talleres de manejo de estrés preventivo."},
+        "Apertura a la Experiencia (O)": {"Muy Alto": "Fomentar roles de **innovación, I+D y diseño estratégico**. Se adaptará bien a cambios y proyectos creativos. **Es idóneo** para Think Tanks.", "Bajo": "Ubicar en tareas con **procedimientos claros y poca ambigüedad**. Puede requerir entrenamiento para manejar el cambio o nuevas tecnologías. **No es idóneo** para roles de innovación disruptiva.", "Promedio": "Apto para roles que requieren un balance entre **estabilidad y creatividad**. Fomentar la participación en grupos de mejora continua."},
+        "Responsabilidad (C)": {"Muy Alto": "Asignar funciones de **auditoría, gestión de proyectos y roles críticos** donde la precisión es vital. Excelente autogestión. **Es idóneo** para Gerencia de Proyectos.", "Bajo": "Evitar roles que demanden alta autonomía en la planificación. Necesita **seguimiento estructurado y objetivos a corto plazo**. **No es idóneo** para Contraloría/Auditoría.", "Promedio": "Capaz de mantener la **disciplina en roles definidos**. Potenciar con herramientas de planificación y gestión del tiempo."},
+        "Extraversión (E)": {"Muy Alto": "Ideal para **ventas, liderazgo de equipos y networking corporativo**. Prospera en ambientes sociales y le gusta influir. **Es idóneo** para Dirección Comercial.", "Bajo": "Apto para roles de **análisis profundo, desarrollo individual y especialistas técnicos**. Requiere un ambiente de trabajo tranquilo y enfocado. **No es idóneo** para Representante de Marca (PR).", "Promedio": "Perfil **adaptable**; puede funcionar bien en equipos y en tareas solitarias. Entrenar en habilidades de presentación y comunicación."},
+        "Amabilidad (A)": {"Muy Alto": "Excelente para **recursos humanos, servicio al cliente y resolución de conflictos**. Promueve un clima laboral positivo. **Es idóneo** para Gerencia de RR.HH.", "Bajo": "Ubicar en posiciones que requieran **negociación dura o toma de decisiones complejas** sin sesgo emocional. Puede tener dificultades en la cohesión de equipos. **No es idóneo** para Soporte al Cliente.", "Promedio": "Buen colaborador. Fomentar el **liderazgo servicial y la mediación** en situaciones grupales."},
+        "Neuroticismo (N)": {"Muy Alto": "Requiere **soporte de bienestar emocional y un ambiente laboral de baja presión**. Evaluar el impacto del estrés en el rendimiento. **No es idóneo** para Operaciones de Crisis.", "Bajo": "Es un perfil **resiliente y estable**. Ideal para roles bajo presión constante (ej. operaciones críticas, manejo de crisis). **Es idóneo** para Gestión de Riesgos.", "Promedio": "Muestra **buena gestión emocional, pero puede fluctuar**. Ofrecer talleres de manejo de estrés preventivo."},
     }
     
     return rec[dim].get(nivel_map, rec[dim].get("Promedio", "Desarrollar un plan de acción basado en las fortalezas y oportunidades en esta dimensión."))
 
 def get_roles_no_recomendados(resultados):
-    """Determina roles no recomendados basándose en puntajes extremos."""
+    """Determina roles no recomendados basándose en puntajes extremos (resumen)."""
     no_aptos = set()
     UMBRAL_BAJO = 25
     UMBRAL_ALTO = 75
@@ -171,6 +170,8 @@ def get_roles_no_recomendados(resultados):
     if resultados.get("Extraversión (E)", 0) < UMBRAL_BAJO:
         no_aptos.add("Ventas de Campo (cierre), Relaciones Públicas (RP) o Presentaciones ante grandes audiencias.")
 
+    if not no_aptos:
+        return "Ningún cargo crítico presenta incompatibilidad significativa."
     return " | ".join(sorted(list(no_aptos)))
 
 def crear_grafico_radar(resultados):
@@ -215,14 +216,13 @@ def crear_grafico_radar(resultados):
     
     return fig
 
-# --- 3. FUNCIONES DE FLUJO DE PÁGINAS ---
+# --- 3. FUNCIONES DE FLUJO DE PÁGINAS Y SCROLL ---
 
 def procesar_y_mostrar_resultados():
     """Calcula y avanza a la vista de resultados con animación."""
     st.session_state.should_scroll = True
     with st.spinner('Procesando datos y generando perfil de competencias...'):
         time.sleep(3)
-    # Se asegura de que se calculen los resultados con las respuestas finales
     st.session_state.resultados = calcular_resultados(st.session_state.respuestas)
     st.session_state.stage = 'resultados'
     st.rerun()
@@ -231,20 +231,27 @@ def iniciar_test():
     """Inicia el test en la primera dimensión."""
     st.session_state.stage = 'test_activo'
     st.session_state.current_dimension_index = 0
-    # Reinicia las respuestas para asegurar resultados dinámicos
     st.session_state.respuestas = {p['key']: None for p in PREGUNTAS} 
     st.session_state.resultados = None
-    st.session_state.should_scroll = True
+    st.session_state.should_scroll = True # Forzar scroll al inicio del test
     st.rerun()
 
+def completar_al_azar():
+    """Genera respuestas aleatorias y avanza a resultados."""
+    # Genera respuestas válidas (1 a 5) para todas las preguntas
+    respuestas_aleatorias = {p['key']: random.choice(LIKERT_OPTIONS) for p in PREGUNTAS}
+    st.session_state.respuestas = respuestas_aleatorias
+    
+    # Simula el final del proceso
+    procesar_y_mostrar_resultados()
+    
 def avanzar_dimension():
     """Avanza al siguiente índice de dimensión o finaliza el test."""
     if st.session_state.current_dimension_index < len(DIMENSIONES_LIST) - 1:
         st.session_state.current_dimension_index += 1
-        st.session_state.should_scroll = True
+        st.session_state.should_scroll = True # Forzar scroll al inicio de la nueva dimensión
         st.rerun()
     else:
-        # Si es la última dimensión, ir a resultados
         procesar_y_mostrar_resultados()
 
 def reiniciar_test():
@@ -261,20 +268,21 @@ def reiniciar_test():
 def vista_inicio():
     st.title("💼 Plataforma de Evaluación Big Five (OCEAN)")
     st.markdown("### Perfil de Competencias y Potencial Profesional")
-    st.info("Este demo evalúa los **Cinco Grandes factores de personalidad**, esenciales para la selección de personal y el desarrollo profesional. El test consta de **25 preguntas divididas en 5 secciones**.")
-    st.markdown(f"""
-    <div style="border: 1px solid #0077b6; padding: 15px; border-radius: 8px; background-color: #e6f7ff;">
-        <p style="font-weight: bold; color: #0077b6;">El test se completará paso a paso (dimensión por dimensión).</p>
-        <ul>
-            <li>{DIMENSIONES['Apertura a la Experiencia (O)']['icon']} Apertura a la Experiencia (O)</li>
-            <li>{DIMENSIONES['Responsabilidad (C)']['icon']} Responsabilidad (C)</li>
-            <li>{DIMENSIONES['Extraversión (E)']['icon']} Extraversión (E)</li>
-            <li>{DIMENSIONES['Amabilidad (A)']['icon']} Amabilidad (A)</li>
-            <li>{DIMENSIONES['Neuroticismo (N)']['icon']} Neuroticismo (N)</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
-    st.button("🚀 Iniciar Evaluación Profesional", type="primary", use_container_width=True, on_click=iniciar_test)
+    st.info("Este demo evalúa los **Cinco Grandes factores de personalidad**. El test consta de **25 preguntas divididas en 5 secciones**.")
+    st.markdown("---")
+    
+    col_manual, col_azar = st.columns(2)
+    
+    with col_manual:
+        st.subheader("Modo Manual")
+        st.caption("Responde cada sección de forma honesta para generar tu perfil detallado.")
+        st.button("🚀 Iniciar Evaluación Profesional", type="primary", use_container_width=True, on_click=iniciar_test)
+
+    with col_azar:
+        st.subheader("Modo Demo")
+        st.caption("Genera un perfil aleatorio instantáneamente para probar la función de resultados.")
+        st.button("🎲 Completar Test Aleatoriamente", type="secondary", use_container_width=True, on_click=completar_al_azar)
+
 
 def vista_test_activo():
     
@@ -297,8 +305,6 @@ def vista_test_activo():
     
     with st.form(f"form_dim_{current_index}"):
         
-        # Diccionario temporal para guardar las respuestas de este formulario antes de la asignación final
-        # Esto es para evitar problemas de persistencia con el st.radio y el st.form
         respuestas_form = {} 
         
         for i, p in enumerate(preguntas_dimension):
@@ -312,11 +318,9 @@ def vista_test_activo():
                 with col_text:
                     st.markdown(f"**Afirmación:** {p['text']}")
                     
-                    # Recupera el valor actual de la sesión
                     initial_value = st.session_state.respuestas.get(p['key'])
                     initial_index = LIKERT_OPTIONS.index(initial_value) if initial_value is not None else None
                     
-                    # El valor del radio se guarda en un diccionario temporal al hacer submit
                     respuestas_form[p['key']] = st.radio(
                         label=f"Respuesta para la pregunta {p['key']}",
                         options=LIKERT_OPTIONS,
@@ -359,6 +363,11 @@ def vista_resultados():
     
     resultados = st.session_state.resultados
     
+    if resultados is None:
+        st.warning("No se encontraron resultados. Por favor, complete la evaluación.")
+        st.button("Volver al Inicio", on_click=reiniciar_test)
+        return
+        
     # --- 1. Resumen Ejecutivo del Perfil ---
     st.header("1. Resumen Ejecutivo del Perfil")
     
@@ -366,7 +375,6 @@ def vista_resultados():
 
     with col_chart:
         st.subheader("1.1 Visualización de Tendencias")
-        # Esta llamada ya no generará NameError
         fig = crear_grafico_radar(resultados)
         st.plotly_chart(fig, use_container_width=True)
         
@@ -413,16 +421,17 @@ def vista_resultados():
     
     roles_no_aptos = get_roles_no_recomendados(resultados)
     
-    if roles_no_aptos:
-        st.error(f"**Cargos NO Recomendados o de Alto Riesgo:** {roles_no_aptos}")
-        st.caption("Esta lista se basa en puntuaciones extremas (Muy Alto o Muy Bajo) que sugieren una incompatibilidad significativa con las demandas típicas de estos roles.")
+    if "Ningún cargo" in roles_no_aptos:
+        st.success(roles_no_aptos)
+        st.caption("Su perfil es versátil. No se identificaron incompatibilidades significativas para roles clave en base a los puntajes extremos.")
     else:
-        st.success("El perfil muestra una gran versatilidad. No se identificaron incompatibilidades significativas para roles clave en base a los puntajes extremos.")
+        st.error(f"**Cargos NO Recomendados o de Alto Riesgo:** {roles_no_aptos}")
+        st.caption("Esta lista se basa en puntuaciones extremas (Muy Alto o Muy Bajo) que sugieren una incompatibilidad significativa con las demandas típicas de estos roles. Considere un plan de desarrollo para estas áreas.")
         
     st.markdown("---")
 
-    # --- 3. Plan de Desarrollo Individual ---
-    st.header("3. Plan de Desarrollo Individual")
+    # --- 3. Plan de Desarrollo Individual y Cargos Idóneos ---
+    st.header("3. Plan de Desarrollo y Cargos Idóneos ✅")
     
     for dim in DIMENSIONES_LIST:
         score = resultados[dim]
@@ -456,6 +465,7 @@ elif st.session_state.stage == 'resultados':
     vista_resultados()
 
 # --- 6. EJECUCIÓN CONDICIONAL DEL SCROLL ---
+# Esto garantiza que el scroll se ejecute *después* de que Streamlit ha renderizado el nuevo contenido
 if st.session_state.should_scroll:
     forzar_scroll_al_top()
     # Desactiva la bandera después de ejecutar el scroll
