@@ -15,7 +15,7 @@ st.set_page_config(
 )
 
 # Ancla para scroll
-st.html('<a id="top-anchor"></a>')
+components.html('<a id="top-anchor"></a>', height=0)
 
 # Definición de las dimensiones del Big Five
 DIMENSIONES = {
@@ -885,3 +885,4 @@ st.markdown("""
     © 2025 - Herramienta educativa y de orientación | No reemplaza evaluación profesional
 </p>
 """, unsafe_allow_html=True)
+
