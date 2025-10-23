@@ -3,13 +3,14 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime
+import streamlit.components.v1 as components
 
 # ==============================
 # CONFIG
 # ==============================
 st.set_page_config(page_title="Big Five PRO | Evaluación Profesional", page_icon="🧠", layout="wide")
 
-# Estilos (fondo blanco, texto negro, colores suaves)
+# Estilos (fondo blanco, texto negro, colores suaves; sin sidebar)
 st.markdown("""
 <style>
 [data-testid="stSidebar"] { display: none !important; }
@@ -19,9 +20,9 @@ html, body, [data-testid="stAppViewContainer"] {
 }
 .block-container { padding-top: 1.0rem; padding-bottom: 3rem; max-width: 1180px; }
 .dim-title {
-  font-size: clamp(1.7rem, 4.5vw, 2.8rem);
+  font-size: clamp(1.8rem, 5vw, 3rem);
   font-weight: 900;
-  letter-spacing: .25px; line-height: 1.15; margin: .2rem 0 .6rem 0;
+  letter-spacing: .25px; line-height: 1.12; margin: .2rem 0 .6rem 0;
   animation: fadeSlide .45s ease-out;
 }
 @keyframes fadeSlide { from {opacity:0; transform: translateY(6px);} to {opacity:1; transform: translateY(0);} }
@@ -36,11 +37,12 @@ html, body, [data-testid="stAppViewContainer"] {
 details summary { font-weight: 700; cursor: pointer; padding: 10px 0; }
 #report-root { padding: 6px 8px; }
 
-/* Acentos suaves (sin azul) */
+/* Acentos suaves (sin azul fuerte) */
 .accent-bg { background: linear-gradient(135deg, #F4A261 0%, #F2CC8F 100%); color:#111; }
 .btn-primary {
   padding:10px 16px; border:1px solid #111; background:#111; color:#fff; border-radius:10px; cursor:pointer; font-weight:700;
 }
+.small { font-size:.95rem; opacity:.9; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -56,7 +58,7 @@ def scroll_top():
           if (appView) appView.scrollTo({ top: 0, behavior: 'auto' });
           window.parent.scrollTo({ top: 0, behavior: 'auto' });
         } catch (e) {}
-      }, 60);
+      }, 40);
     </script>
     """, unsafe_allow_html=True)
 
@@ -70,37 +72,48 @@ DIMENSIONES = {
     "Apertura a la Experiencia": {
         "code": "O",
         "desc": "Imaginación, curiosidad intelectual, creatividad y aprecio por nuevas experiencias.",
-        "pros": ["Alta creatividad e ideación.", "Ajuste a ambientes cambiantes.", "Curiosidad por aprender."],
-        "contras": ["Puede dispersarse si no prioriza.", "Busca novedad cuando se requiere rutina."],
-        "cargos": ["Innovación", "Diseño UX/UI", "Estrategia", "I+D", "Consultoría"]
+        # base messages para componer dinámicamente
+        "pros_high": ["Genera ideas originales.", "Se adapta a entornos cambiantes.", "Curiosidad constante por aprender."],
+        "risks_low": ["Le cuesta la novedad.", "Prefiere lo conocido aunque haya oportunidades.", "Menor interés por temas abstractos."],
+        "recs_low": ["Practicar micro-experimentos controlados.", "Exponerse a ideas nuevas 10–15 min/día.", "Usar técnicas de ideación guiadas."],
+        "roles_high": ["Innovación", "Diseño UX/UI", "Estrategia", "I+D", "Consultoría"],
+        "roles_low": ["Operaciones Estandarizadas", "Back Office", "Calidad con Procedimientos"]
     },
     "Responsabilidad": {
         "code": "C",
         "desc": "Autodisciplina, organización, cumplimiento de objetivos y sentido del deber.",
-        "pros": ["Fiabilidad y consistencia.", "Orientación a resultados y detalle.", "Planificación eficaz."],
-        "contras": ["Rigidez ante cambios súbitos.", "Perfeccionismo o sobrecarga."],
-        "cargos": ["Gestión de Proyectos", "Finanzas", "Auditoría", "Operaciones", "Calidad"]
+        "pros_high": ["Alta fiabilidad y consistencia.", "Planifica y prioriza con precisión.", "Cumple plazos y estándares de calidad."],
+        "risks_low": ["Procrastinación frecuente.", "Desorden en sistemas y archivos.", "Olvida compromisos o detalles."],
+        "recs_low": ["Implementar checklists simples.", "Timeboxing de tareas clave.", "Revisiones semanales de prioridades."],
+        "roles_high": ["Gestión de Proyectos", "Finanzas", "Auditoría", "Operaciones", "Calidad"],
+        "roles_low": ["Creativo sin plazos rígidos", "Exploración Temprana", "Ideación"]
     },
     "Extraversión": {
         "code": "E",
         "desc": "Sociabilidad, asertividad, energía y búsqueda de estimulación social.",
-        "pros": ["Habilidades de influencia y networking.", "Alta energía en equipos.", "Comunicación efectiva."],
-        "contras": ["Puede dominar conversaciones.", "Menor preferencia por trabajo individual prolongado."],
-        "cargos": ["Ventas", "Liderazgo Comercial", "Relaciones Públicas", "Desarrollo de Negocios"]
+        "pros_high": ["Facilidad para influir y hacer networking.", "Energía en contextos colaborativos.", "Comunicación clara en público."],
+        "risks_low": ["Menor comodidad en grupos grandes.", "Prefiere trabajo individual prolongado.", "Evita exposición pública."],
+        "recs_low": ["Practicar exposición gradual.", "Reuniones 1:1 antes de plenarias.", "Preparar guiones breves para presentaciones."],
+        "roles_high": ["Ventas", "Liderazgo Comercial", "Relaciones Públicas", "Desarrollo de Negocios"],
+        "roles_low": ["Análisis", "Investigación", "Programación", "Data"]
     },
     "Amabilidad": {
         "code": "A",
         "desc": "Cooperación, empatía, compasión, confianza y respeto.",
-        "pros": ["Clima colaborativo y confianza.", "Resolución de conflictos y empatía.", "Buen servicio al cliente."],
-        "contras": ["Dificultad para confrontar.", "Puede evitar decisiones impopulares."],
-        "cargos": ["RR.HH.", "Servicio al Cliente", "Mediación", "Trabajo Social", "Customer Success"]
+        "pros_high": ["Construye confianza y clima positivo.", "Gestiona conflictos con empatía.", "Alta orientación a servicio."],
+        "risks_low": ["Estilo directo o escéptico.", "Coste en relaciones sensibles.", "Baja tolerancia a ambigüedad emocional."],
+        "recs_low": ["Técnicas de escucha activa.", "Reformular juicios por hipótesis.", "Feedback con método SBI."],
+        "roles_high": ["RR.HH.", "Servicio al Cliente", "Mediación", "Customer Success"],
+        "roles_low": ["Negociación dura", "Trading", "Toma de decisiones impopulares"]
     },
     "Estabilidad Emocional": {
         "code": "N",
         "desc": "Gestión del estrés y calma bajo presión (opuesto a Neuroticismo).",
-        "pros": ["Resiliencia ante la presión.", "Toma de decisiones serena.", "Estabilidad en crisis."],
-        "contras": ["Puede subestimar riesgos emocionales ajenos.", "Menor urgencia ante problemas menores."],
-        "cargos": ["Operaciones Críticas", "Liderazgo Ejecutivo", "Soporte de Incidentes", "Seguridad/Compliance"]
+        "pros_high": ["Serenidad bajo presión.", "Resiliencia en incidentes.", "Decisiones estables con datos."],
+        "risks_low": ["Estrés frecuente o rumiación.", "Cambios de ánimo.", "Sobrecarga ante incertidumbre."],
+        "recs_low": ["Respiración 4-7-8 3x/día.", "Rutina de sueño y pausas activas.", "Journaling breve para descarga emocional."],
+        "roles_high": ["Operaciones Críticas", "Dirección", "Soporte de Incidentes", "Compliance"],
+        "roles_low": ["Ambientes caóticos sin soporte", "Creativo con deadlines difusos"]
     },
 }
 DIMENSIONES_LIST = list(DIMENSIONES.keys())
@@ -204,7 +217,7 @@ def label_level(score: float):
     return "Muy Bajo", "Mínimo"
 
 # ==============================
-# CALLBACK (auto-avance sin st.rerun dentro)
+# CALLBACK (auto-avance sin st.rerun)
 # ==============================
 def on_answer_change():
     i = st.session_state.q_index
@@ -214,7 +227,6 @@ def on_answer_change():
     if i < len(PREGUNTAS) - 1:
         st.session_state.q_index = i + 1
         scroll_top()
-        # NO st.rerun() aquí: Streamlit ya rerenderiza al cambiar el widget.
     else:
         st.session_state.stage = "resultados"
         st.session_state.fecha_eval = datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -235,11 +247,11 @@ def view_inicio():
         """
         <div class="card accent-bg" style="padding:26px; border-radius:16px; margin-bottom:18px;">
           <h1 style="margin:0 0 6px 0; font-size:clamp(1.9rem,3.8vw,2.8rem); font-weight:900;">🧠 Test Big Five (OCEAN)</h1>
-          <p style="margin:0; font-size:1.06rem; opacity:.95;">Evaluación profesional con resultados accionables, métricas y visualizaciones.<br>Fondo blanco, alto contraste y diseño responsivo.</p>
+          <p class="small" style="margin:0;">Evaluación profesional con resultados accionables, métricas y visualizaciones.<br>Fondo blanco, alto contraste y diseño responsivo.</p>
         </div>
         """, unsafe_allow_html=True
     )
-    col1, col2 = st.columns([1.4, 1])
+    col1, col2 = st.columns([1.35, 1])
     with col1:
         st.markdown(
             """
@@ -252,7 +264,7 @@ def view_inicio():
                 <li><b>A</b> – Amabilidad</li>
                 <li><b>N</b> – Estabilidad Emocional</li>
               </ul>
-              <p style="opacity:.9">Duración estimada: <b>8–12 min</b> · 50 ítems Likert (1–5) · Avance automático al responder.</p>
+              <p class="small">Duración estimada: <b>8–12 min</b> · 50 ítems Likert (1–5) · Avance automático al responder.</p>
             </div>
             """, unsafe_allow_html=True
         )
@@ -309,6 +321,34 @@ def view_test():
     )
     st.markdown("</div>", unsafe_allow_html=True)
 
+def _dynamic_lists(dim_name: str, score: float):
+    """Devuelve (fortalezas, oportunidades, recomendaciones, roles) dinámicos según score."""
+    info = DIMENSIONES[dim_name]
+    if score >= 60:  # Alto o Muy Alto
+        fortalezas = info["pros_high"]
+        oportunidades = ["Evitar dispersarse en demasiadas iniciativas.", "Conectar la creatividad con ejecución tangible."] if dim_name == "Apertura a la Experiencia" else \
+                        ["Cuidar la escucha de otras opiniones."] if dim_name == "Extraversión" else \
+                        ["Equilibrar empatía con límites claros."] if dim_name == "Amabilidad" else \
+                        ["Evitar exceso de confianza ante riesgos."] if dim_name == "Estabilidad Emocional" else \
+                        ["Evitar perfeccionismo paralizante."]
+        recomendaciones = ["Definir OKRs claros por trimestre.", "Revisiones quincenales de foco y prioridades."]
+        roles = info["roles_high"]
+    elif score < 40:  # Bajo o Muy Bajo
+        fortalezas = ["Enfoque práctico y realista."] if dim_name == "Apertura a la Experiencia" else \
+                     ["Flexibilidad y espontaneidad."] if dim_name == "Responsabilidad" else \
+                     ["Capacidad de concentración individual."] if dim_name == "Extraversión" else \
+                     ["Objetividad y comunicación directa."] if dim_name == "Amabilidad" else \
+                     ["Sensibilidad que puede potenciar creatividad."]  # N bajo
+        oportunidades = info["risks_low"]
+        recomendaciones = info["recs_low"]
+        roles = info["roles_low"]
+    else:  # Promedio
+        fortalezas = ["Buen balance situacional.", "Adaptabilidad según contexto."]
+        oportunidades = ["Detectar momentos para subir o bajar esta palanca de conducta.", "Diseñar rituales ligeros que consoliden el equilibrio."]
+        recomendaciones = ["Micro-hábitos medibles 2–3/semana.", "Feedback mensual con pares o líder."]
+        roles = info["roles_high"][:2] + info["roles_low"][:1]
+    return fortalezas, oportunidades, recomendaciones, roles
+
 def view_resultados():
     scroll_top()
     results = compute_scores(st.session_state.answers)
@@ -324,7 +364,7 @@ def view_resultados():
         f"""
         <div class="card" style="padding:26px; border-radius:16px; margin-bottom:18px;">
           <h1 style="margin:0 0 6px 0; font-size:clamp(1.9rem,3.8vw,2.8rem); font-weight:900;">📊 Informe de Personalidad Big Five</h1>
-          <p style="margin:0; font-size:1.05rem; opacity:.9;">Fecha de evaluación: <b>{st.session_state.fecha_eval}</b></p>
+          <p class="small" style="margin:0;">Fecha de evaluación: <b>{st.session_state.fecha_eval}</b></p>
         </div>
         """, unsafe_allow_html=True
     )
@@ -338,7 +378,7 @@ def view_resultados():
 
     st.markdown("---")
 
-    # Colores suaves para gráficos (sin azules fuertes)
+    # Colores suaves (sin azules fuertes)
     palette = ["#E07A5F", "#81B29A", "#F2CC8F", "#9C6644", "#6D597A"]
 
     # Radar
@@ -395,10 +435,11 @@ def view_resultados():
     st.markdown("---")
     st.subheader("🔍 Análisis cualitativo por dimensión")
 
-    # Bloques por dimensión con gauge + pros/contras/cargos (keys únicos)
+    # Bloques por dimensión con gauge + listas dinámicas (keys únicos)
     for idx, d in enumerate(DIMENSIONES_LIST):
         score = results[d]
         lvl, tag = label_level(score)
+        fortalezas, oportunidades, recomendaciones, roles = _dynamic_lists(d, score)
         info = DIMENSIONES[d]
         with st.expander(f"{info['code']} — {d}: {score:.1f} ({lvl})", expanded=True):
             colA, colB = st.columns([1, 2])
@@ -433,63 +474,70 @@ def view_resultados():
                 cc1, cc2, cc3 = st.columns(3)
                 with cc1:
                     st.markdown("**Fortalezas**")
-                    st.markdown("<ul>" + "".join([f"<li>{p}</li>" for p in info["pros"]]) + "</ul>", unsafe_allow_html=True)
+                    st.markdown("<ul>" + "".join([f"<li>{p}</li>" for p in fortalezas]) + "</ul>", unsafe_allow_html=True)
                 with cc2:
                     st.markdown("**Oportunidades**")
-                    st.markdown("<ul>" + "".join([f"<li>{c}</li>" for c in info["contras"]]) + "</ul>", unsafe_allow_html=True)
+                    st.markdown("<ul>" + "".join([f"<li>{c}</li>" for c in oportunidades]) + "</ul>", unsafe_allow_html=True)
                 with cc3:
-                    st.markdown("**Cargos sugeridos**")
-                    st.markdown("<ul>" + "".join([f"<li>{c}</li>" for c in info["cargos"]]) + "</ul>", unsafe_allow_html=True)
+                    st.markdown("**Recomendaciones**")
+                    st.markdown("<ul>" + "".join([f"<li>{r}</li>" for r in recomendaciones]) + "</ul>", unsafe_allow_html=True)
+
+                st.markdown("**Cargos sugeridos**")
+                st.markdown("<ul>" + "".join([f"<li>{c}</li>" for c in roles]) + "</ul>", unsafe_allow_html=True)
 
     st.markdown("---")
     st.subheader("📥 Exportar informe (PDF)")
-    st.caption("El archivo incluye los gráficos y todo lo visible en esta página de resultados.")
+    st.caption("Captura todo el informe (incluye gráficos y tablas).")
 
-    st.markdown("""
-    <div class="card">
-      <button id="btn-pdf" class="btn-primary">Descargar PDF</button>
-      <span style="margin-left:10px; opacity:.8;">Si no descarga, espera un segundo y vuelve a intentar.</span>
+    # Botón y script PDF integrados en iframe (1 solo click, sin perder el listener)
+    components.html(f"""
+    <div>
+      <button id="btn-pdf" style="
+        padding:10px 16px; border:1px solid #111; background:#111; color:#fff; border-radius:10px; cursor:pointer; font-weight:700;
+      ">Descargar PDF</button>
+      <span style="margin-left:10px; opacity:.8; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;">Si no descarga, espera un segundo y vuelve a intentar.</span>
     </div>
-    """, unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)  # cierre #report-root
-
-    # Carga de librerías y generación PDF en cliente (sin libs server)
-    st.markdown("""
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script>
-      const clickBtn = () => {
-        const { jsPDF } = window.jspdf;
-        const target = document.querySelector('#report-root');
-        if (!target) return;
-        html2canvas(target, {scale: 2, backgroundColor: '#ffffff'}).then(canvas => {
-            const imgData = canvas.toDataURL('image/png', 1.0);
-            const pdf = new jsPDF('p', 'pt', 'a4');
-            const pageWidth = pdf.internal.pageSize.getWidth();
-            const pageHeight = pdf.internal.pageSize.getHeight();
-            const imgWidth = pageWidth;
-            const imgHeight = canvas.height * imgWidth / canvas.width;
-            if (imgHeight <= pageHeight) {
-                pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-            } else {
-                let heightLeft = imgHeight;
-                let y = 0;
-                while (heightLeft > 0) {
-                    pdf.addImage(imgData, 'PNG', 0, y, imgWidth, imgHeight);
-                    heightLeft -= pageHeight;
-                    y -= pageHeight;
-                    if (heightLeft > 0) pdf.addPage();
-                }
-            }
-            pdf.save('Informe_BigFive.pdf');
-        });
-      };
-      setTimeout(() => {
-        const btn = window.parent.document.querySelector('#btn-pdf') || document.querySelector('#btn-pdf');
-        if (btn) btn.onclick = clickBtn;
-      }, 500);
+      const rootId = 'report-root';
+      const getRoot = () => (window.parent && window.parent.document ? window.parent.document.getElementById(rootId) : document.getElementById(rootId));
+      const once = (el, ev, fn) => {{ el.addEventListener(ev, fn, {{ once: true }}); }};
+      const bind = () => {{
+        const btn = document.getElementById('btn-pdf');
+        if (!btn) return;
+        btn.onclick = async () => {{
+          const target = getRoot();
+          if (!target) return alert('No se encontró el contenedor de reporte.');
+          const {{ jsPDF }} = window.jspdf;
+          const canvas = await html2canvas(target, {{ scale: 2, backgroundColor: '#ffffff', useCORS: true, windowWidth: target.scrollWidth }});
+          const imgData = canvas.toDataURL('image/png', 1.0);
+          const pdf = new jsPDF('p', 'pt', 'a4');
+          const pageWidth = pdf.internal.pageSize.getWidth();
+          const pageHeight = pdf.internal.pageSize.getHeight();
+          const imgWidth = pageWidth;
+          const imgHeight = canvas.height * imgWidth / canvas.width;
+          if (imgHeight <= pageHeight) {{
+            pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+          }} else {{
+            let heightLeft = imgHeight;
+            let y = 0;
+            while (heightLeft > 0) {{
+              pdf.addImage(imgData, 'PNG', 0, y, imgWidth, imgHeight);
+              heightLeft -= pageHeight;
+              y -= pageHeight;
+              if (heightLeft > 0) pdf.addPage();
+            }}
+          }}
+          pdf.save('Informe_BigFive.pdf');
+        }};
+      }};
+      // Bind inmediato
+      bind();
     </script>
-    """, unsafe_allow_html=True)
+    """, height=90)
+
+    st.markdown("</div>", unsafe_allow_html=True)  # cierre #report-root
 
     st.markdown("---")
     if st.button("🔄 Realizar nueva evaluación", type="primary", use_container_width=True):
