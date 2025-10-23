@@ -1,7 +1,7 @@
+
 # ================================================================
-#  Big Five (OCEAN) — Evaluación Laboral PRO (sin doble click)
-#  Versión con análisis por dimensión mejorado (colores, estructura,
-#  más detalle y “No recomendado para”)
+#  Big Five (OCEAN) — Evaluación Laboral PRO (auto-avance + PDF)
+#  Con medidores semicirculares en pantalla y en el PDF
 # ================================================================
 import streamlit as st
 import pandas as pd
@@ -10,12 +10,12 @@ import plotly.graph_objects as go
 from datetime import datetime
 from io import BytesIO
 
-# Intento usar matplotlib (para PDF). Si no está, habrá fallback a HTML.
+# Intento usar matplotlib (para PDF). Si no está, fallback a HTML.
 HAS_MPL = False
 try:
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_pdf import PdfPages
-    from matplotlib.patches import FancyBboxPatch
+    from matplotlib.patches import FancyBboxPatch, Wedge, Circle
     HAS_MPL = True
 except Exception:
     HAS_MPL = False
@@ -148,13 +148,12 @@ hr{ border:none; border-top:1px solid #eee; margin:16px 0; }
 # ---------------------------------------------------------------
 def reverse_score(v:int)->int: return 6 - v
 
-# Agregamos iconos y paleta por dimensión
+# Paleta por dimensión
 DIMENSIONES = {
     "Apertura a la Experiencia": {
-        "code":"O",
-        "icon":"💡",
+        "code":"O", "icon":"💡",
         "desc":"Curiosidad intelectual, creatividad y apertura al cambio.",
-        # Alta / Baja
+        "color":"#8FB996",
         "fort_high":[
             "Genera ideas originales y puentes entre conceptos.",
             "Explora nuevas metodologías con aprendizaje rápido.",
@@ -183,9 +182,9 @@ DIMENSIONES = {
         "no_apt_low":["Laboratorios de innovación, estrategia corporativa"]
     },
     "Responsabilidad": {
-        "code":"C",
-        "icon":"🎯",
+        "code":"C", "icon":"🎯",
         "desc":"Orden, planificación, disciplina y cumplimiento de objetivos.",
+        "color":"#A1C3D1",
         "fort_high":[
             "Fiabilidad en plazos y calidad del entregable.",
             "Excelente gestión del tiempo y priorización.",
@@ -213,9 +212,9 @@ DIMENSIONES = {
         "no_apt_low":["PMO, compliance, control interno"]
     },
     "Extraversión": {
-        "code":"E",
-        "icon":"🗣️",
+        "code":"E", "icon":"🗣️",
         "desc":"Asertividad, sociabilidad y energía en interacción.",
+        "color":"#F2C6B4",
         "fort_high":[
             "Networking sostenido y visibilidad del equipo.",
             "Comunicación clara ante grupos y stakeholders.",
@@ -243,9 +242,9 @@ DIMENSIONES = {
         "no_apt_low":["Puestos comerciales de alto contacto inmediato"]
     },
     "Amabilidad": {
-        "code":"A",
-        "icon":"🤝",
+        "code":"A", "icon":"🤝",
         "desc":"Colaboración, empatía y confianza.",
+        "color":"#E8D6CB",
         "fort_high":[
             "Clima de confianza y cohesión en el equipo.",
             "Gestión empática de conflictos.",
@@ -273,9 +272,9 @@ DIMENSIONES = {
         "no_apt_low":["Facilitación, mediación, soporte sensible"]
     },
     "Estabilidad Emocional": {
-        "code":"N",
-        "icon":"🧘",
+        "code":"N", "icon":"🧘",
         "desc":"Gestión del estrés, resiliencia y calma bajo presión.",
+        "color":"#D6EADF",
         "fort_high":[
             "Serenidad en incidentes y crisis.",
             "Recuperación rápida y foco en soluciones.",
@@ -376,7 +375,7 @@ if "fecha" not in st.session_state: st.session_state.fecha = None
 if "_needs_rerun" not in st.session_state: st.session_state._needs_rerun = False
 
 # ---------------------------------------------------------------
-# Cálculo de resultados
+# Utilidades de cálculo
 # ---------------------------------------------------------------
 def compute_scores(answers:dict)->dict:
     buckets = {d:[] for d in DIM_LIST}
@@ -405,45 +404,33 @@ def dimension_profile(d:str, score:float):
             "Capacidad de modelar buenas prácticas para pares.",
             "Eleva el estándar del equipo en esa dimensión."
         ]
-        r = ds["risk_high"] + [
-            "Si no se regula, impacta foco/tiempos de otros.",
-        ]
+        r = ds["risk_high"] + ["Si no se regula, impacta foco/tiempos de otros."]
         rec = [
             "Definir OKRs y criterios de cierre por sprint.",
             "Hitos intermedios con aceptación por pares.",
             "Revisión quincenal para calibrar foco/impacto."
         ]
-        roles = ds["roles_high"]
-        not_apt = ds.get("no_apt_high", [])
+        roles = ds["roles_high"]; not_apt = ds.get("no_apt_high", [])
         expl = "KPI alto: tu conducta típica favorece el desempeño cuando el rol exige este rasgo como palanca principal."
     elif score<40:
-        f = ds["fort_low"] + [
-            "Estabilidad de ejecución en límites conocidos."
-        ]
-        r = ds["risk_low"] + [
-            "Puede requerir soporte explícito en entornos de presión/ambigüedad."
-        ]
+        f = ds["fort_low"] + ["Estabilidad de ejecución en límites conocidos."]
+        r = ds["risk_low"] + ["Puede requerir soporte explícito en entornos de presión/ambigüedad."]
         rec = ds["recs_low"] + [
             "Rutina breve semanal de reflexión de aprendizajes.",
             "Definir 1 hábito palanca (2 min/día) durante 21 días."
         ]
-        roles = ds["roles_low"]
-        not_apt = ds.get("no_apt_low", [])
+        roles = ds["roles_low"]; not_apt = ds.get("no_apt_low", [])
         expl = "KPI bajo: tu estilo se sitúa en el extremo opuesto; útil en ciertos contextos, con riesgos en otros si no hay compensaciones."
     else:
-        f = ["Balance situacional entre ambos extremos",
-             "Capacidad de lectura del contexto antes de actuar"]
-        r = ["Variabilidad entre equipos/líderes; alinear expectativas",
-             "Riesgo de ambivalencia si faltan métricas claras"]
-        rec = ["Definir escenarios de cuándo 'subir' o 'bajar' este rasgo",
-               "Feedback mensual de 360° enfocado en esta dimensión"]
-        roles = ds["roles_high"][:2] + ds["roles_low"][:1]
-        not_apt = []
+        f = ["Balance situacional entre ambos extremos", "Capacidad de lectura del contexto antes de actuar"]
+        r = ["Variabilidad entre equipos/líderes; alinear expectativas", "Riesgo de ambivalencia si faltan métricas claras"]
+        rec = ["Definir escenarios de cuándo 'subir' o 'bajar' este rasgo", "Feedback mensual de 360° enfocado en esta dimensión"]
+        roles = ds["roles_high"][:2] + ds["roles_low"][:1]; not_apt = []
         expl = "KPI medio: perfil flexible; puede optimizarse con reglas simples de activación según el entorno."
     return f, r, rec, roles, not_apt, expl
 
 # ---------------------------------------------------------------
-# Auto-avance: callback SIN rerun (marcamos bandera)
+# Auto-avance: callback SIN doble click (bandera + rerun al final)
 # ---------------------------------------------------------------
 def on_answer_change(qkey:str):
     st.session_state.answers[qkey] = st.session_state.get(f"resp_{qkey}")
@@ -453,10 +440,10 @@ def on_answer_change(qkey:str):
     else:
         st.session_state.stage = "resultados"
         st.session_state.fecha = datetime.now().strftime("%d/%m/%Y %H:%M")
-    st.session_state._needs_rerun = True  # se ejecuta al final del ciclo
+    st.session_state._needs_rerun = True  # rerun único al final
 
 # ---------------------------------------------------------------
-# Gráficos
+# Gráficos (Radar, Barras, Gauge semicircular Plotly)
 # ---------------------------------------------------------------
 def plot_radar(res:dict):
     order = list(res.keys())
@@ -487,22 +474,70 @@ def plot_bar(res:dict):
                       yaxis=dict(title=""))
     return fig, df
 
+def gauge_plotly(value: float, title: str = "", color="#6D597A"):
+    """Medidor semicircular (0–100) con aguja."""
+    v = max(0, min(100, float(value)))
+    bounds = [0, 25, 40, 60, 75, 100]
+    colors = ["#fde2e1", "#fff0c2", "#e9f2fb", "#e7f6e8", "#d9f2db"]
+    vals = [bounds[i+1]-bounds[i] for i in range(len(bounds)-1)]
+    fig = go.Figure()
+    fig.add_trace(go.Pie(
+        values=vals, hole=0.6, rotation=180, direction="clockwise",
+        text=[f"{bounds[i]}–{bounds[i+1]}" for i in range(5)],
+        textinfo="none", marker=dict(colors=colors, line=dict(color="#ffffff", width=1)),
+        hoverinfo="skip", showlegend=False, sort=False
+    ))
+    import math
+    theta = (180 * (v/100.0))
+    r = 0.95; x0, y0 = 0.5, 0.5
+    xe = x0 + r*math.cos(math.radians(180 - theta))
+    ye = y0 + r*math.sin(math.radians(180 - theta))
+    fig.add_shape(type="line", x0=x0, y0=y0, x1=xe, y1=ye, line=dict(color=color, width=4))
+    fig.add_shape(type="circle", x0=x0-0.02, y0=y0-0.02, x1=x0+0.02, y1=y0+0.02,
+                  line=dict(color=color), fillcolor=color)
+    fig.update_layout(
+        annotations=[
+            dict(text=f"<b>{v:.1f}</b>", x=0.5, y=0.32, showarrow=False, font=dict(size=24, color="#111")),
+            dict(text=title, x=0.5, y=0.16, showarrow=False, font=dict(size=13, color="#333")),
+        ],
+        margin=dict(l=10, r=10, t=10, b=10), showlegend=False, height=220
+    )
+    return fig
+
 # ---------------------------------------------------------------
-# Exportar (PDF si hay MPL; HTML si no)
+# Exportar (PDF con medidores; HTML si no hay MPL)
 # ---------------------------------------------------------------
+def pdf_semicircle(ax, value, cx=0.5, cy=0.5, r=0.45):
+    """Dibuja un medidor semicircular matplotlib (0–100)."""
+    v = max(0, min(100, float(value)))
+    bands = [(0,25,"#fde2e1"), (25,40,"#fff0c2"), (40,60,"#e9f2fb"),
+             (60,75,"#e7f6e8"), (75,100,"#d9f2db")]
+    for a,b,c in bands:
+        ang1 = 180*(a/100.0); ang2 = 180*(b/100.0)
+        w = Wedge((cx,cy), r, 180-ang2, 180-ang1, facecolor=c, edgecolor="#fff", lw=1)
+        ax.add_patch(w)
+    import math
+    theta = math.radians(180*(v/100.0))
+    x2 = cx + r*0.95*math.cos(np.pi - theta)
+    y2 = cy + r*0.95*math.sin(np.pi - theta)
+    ax.plot([cx, x2], [cy, y2], color="#6D597A", lw=3)
+    ax.add_patch(Circle((cx,cy), 0.02, color="#6D597A"))
+    ax.text(cx, cy-0.12, f"{v:.1f}", ha="center", va="center", fontsize=16, color="#111")
+
 def build_pdf(res:dict, fecha:str)->bytes:
     order = list(res.keys()); vals=[res[d] for d in order]
     avg = np.mean(vals); std = np.std(vals, ddof=1) if len(vals)>1 else 0.0
-    rng = np.max(vals)-np.min(vals); top = max(res, key=res.get)
+    rng = np.max(vals)-np.min(vals); top = max(res, key=res.get); low = min(res, key=res.get)
 
     buf = BytesIO()
     with PdfPages(buf) as pdf:
-        # Portada + KPIs
+        # Portada + KPIs con 3 medidores semicirculares
         fig = plt.figure(figsize=(8.27,11.69))  # A4
         ax = fig.add_axes([0,0,1,1]); ax.axis('off')
-        ax.text(.5,.94,"Informe Big Five — Contexto Laboral", ha='center', fontsize=20, fontweight='bold')
-        ax.text(.5,.91,f"Fecha: {fecha}", ha='center', fontsize=11)
+        ax.text(.5,.95,"Informe Big Five — Contexto Laboral", ha='center', fontsize=20, fontweight='bold')
+        ax.text(.5,.92,f"Fecha: {fecha}", ha='center', fontsize=11)
 
+        # Tarjetas KPI
         def card(ax, x,y,w,h,title,val):
             r = FancyBboxPatch((x,y), w,h, boxstyle="round,pad=0.012,rounding_size=0.018",
                                edgecolor="#dddddd", facecolor="#ffffff")
@@ -510,17 +545,28 @@ def build_pdf(res:dict, fecha:str)->bytes:
             ax.text(x+w*0.06, y+h*0.60, title, fontsize=10, color="#333")
             ax.text(x+w*0.06, y+h*0.25, f"{val}", fontsize=20, fontweight='bold')
 
-        Y0 = .80; H = .10; W = .40; GAP = .02
-        card(ax, .06, Y0, W, H, "Promedio general (0–100)", f"{avg:.1f}")
+        Y0 = .82; H = .10; W = .40; GAP = .02
+        card(ax, .06, Y0, W, H, "Promedio (0–100)", f"{avg:.1f}")
         card(ax, .54, Y0, W, H, "Desviación estándar", f"{std:.2f}")
-        card(ax, .06, Y0-(H+GAP), W, H, "Rango", f"{rng:.2f}")
+        card(ax, .06, Y0-(H+GAP), W, H, "Rango entre dimensiones", f"{rng:.2f}")
         card(ax, .54, Y0-(H+GAP), W, H, "Dimensión destacada", f"{top}")
 
-        ax.text(.5,.58,"Puntuaciones por dimensión", ha='center', fontsize=14, fontweight='bold')
-        ylist = .54
-        for d in order:
-            ax.text(.1, ylist, f"{DIMENSIONES[d]['code']} — {d}: {res[d]:.1f}", fontsize=11)
-            ylist -= 0.03
+        # Tres medidores (promedio, mejor, menor)
+        axg1 = fig.add_axes([.12, .54, .22, .16]); axg1.axis('off'); pdf_semicircle(axg1, avg, 0.5, 0.0, 0.9); axg1.text(.5,-.35,"Promedio",ha="center",fontsize=10)
+        axg2 = fig.add_axes([.39, .54, .22, .16]); axg2.axis('off'); pdf_semicircle(axg2, res[top], 0.5, 0.0, 0.9); axg2.text(.5,-.35,f"Mayor: {top}",ha="center",fontsize=10)
+        axg3 = fig.add_axes([.66, .54, .22, .16]); axg3.axis('off'); pdf_semicircle(axg3, res[low], 0.5, 0.0, 0.9); axg3.text(.5,-.35,f"Menor: {low}",ha="center",fontsize=10)
+
+        # Lista breve
+        ylist = .46
+        ax.text(.08,ylist,"Resumen ejecutivo", fontsize=14, fontweight='bold'); ylist -= .04
+        bullets = [
+            f"Fortaleza clave: {top} ({res[top]:.1f})",
+            f"Área a potenciar: {low} ({res[low]:.1f})",
+            "Perfil global equilibrado" if 40<=avg<=60 else ("Tendencia alta para ambientes exigentes" if avg>60 else "Perfil conservador, ideal para entornos estables"),
+            f"Variabilidad: DE={std:.2f} · Rango={rng:.2f}",
+        ]
+        for b in bullets:
+            ax.text(.10, ylist, f"• {b}", fontsize=11); ylist -= .03
 
         pdf.savefig(fig, bbox_inches='tight'); plt.close(fig)
 
@@ -536,15 +582,18 @@ def build_pdf(res:dict, fecha:str)->bytes:
             a2.text(v+1, i, f"{v:.1f}", va='center', fontsize=9)
         pdf.savefig(fig2, bbox_inches='tight'); plt.close(fig2)
 
-        # Análisis por dimensión (incluye No recomendado para)
+        # Análisis por dimensión con medidor
         for d in order:
             score = res[d]; lvl, tag = level_label(score)
             f, r, recs, roles, not_apt, expl = dimension_profile(d, score)
+
             fig3 = plt.figure(figsize=(8.27,11.69)); ax3 = fig3.add_axes([0,0,1,1]); ax3.axis('off')
             ax3.text(.5,.95, f"{DIMENSIONES[d]['code']} — {d}", ha='center', fontsize=16, fontweight='bold')
             ax3.text(.5,.92, f"Puntuación: {score:.1f} · Nivel: {lvl} ({tag})", ha='center', fontsize=11)
-            ax3.text(.08,.88,"Descripción", fontsize=13, fontweight='bold'); ax3.text(.08,.85, DIMENSIONES[d]["desc"], fontsize=11)
-            ax3.text(.08,.81,"Explicativo del KPI", fontsize=13, fontweight='bold'); ax3.text(.08,.78, expl, fontsize=11)
+
+            # Gauge de dimensión
+            axg = fig3.add_axes([.18, .80, .64, .14]); axg.axis("off")
+            pdf_semicircle(axg, score, cx=0.5, cy=0.0, r=0.9)
 
             def draw_list(y, title, items):
                 ax3.text(.08,y,title, fontsize=13, fontweight='bold')
@@ -554,12 +603,18 @@ def build_pdf(res:dict, fecha:str)->bytes:
                     yy -= .03
                 return yy -.02
 
-            yy = .74
+            ax3.text(.08,.78,"Descripción", fontsize=13, fontweight='bold')
+            ax3.text(.08,.75, DIMENSIONES[d]["desc"], fontsize=11)
+            ax3.text(.08,.71,"Explicativo del KPI", fontsize=13, fontweight='bold')
+            ax3.text(.08,.68, expl, fontsize=11)
+
+            yy = .63
             yy = draw_list(yy, "Fortalezas (laborales)", f)
             yy = draw_list(yy, "Riesgos / Cosas a cuidar", r)
             yy = draw_list(yy, "Recomendaciones", recs)
             yy = draw_list(yy, "Roles sugeridos", roles)
             draw_list(yy, "No recomendado para", not_apt if not_apt else ["—"])
+
             pdf.savefig(fig3, bbox_inches='tight'); plt.close(fig3)
 
     buf.seek(0)
@@ -677,7 +732,7 @@ def view_inicio():
               <ol style="line-height:1.6">
                 <li>Ves 1 pregunta por pantalla y eliges una opción.</li>
                 <li>Al elegir, avanzas automáticamente a la siguiente.</li>
-                <li>Resultados con KPIs, gráficos y análisis laboral (pros, riesgos, recomendaciones, <i>roles sugeridos</i> y <i>no recomendado para</i>).</li>
+                <li>Resultados con KPIs, medidores, gráficos y análisis laboral (pros, riesgos, recomendaciones, <i>roles sugeridos</i> y <i>no recomendado para</i>).</li>
               </ol>
             </div>
             """, unsafe_allow_html=True
@@ -762,7 +817,7 @@ def view_resultados():
     })
     st.dataframe(tabla, use_container_width=True, hide_index=True)
 
-    # ---------- NUEVO: Análisis por dimensión con colores y estructura ----------
+    # ---------- Análisis por dimensión + Gauge ----------
     st.markdown("---")
     st.subheader("🔍 Análisis por dimensión (laboral)")
 
@@ -789,52 +844,46 @@ def view_resultados():
                 </div>
               </div>
               <div class="dim-body">
+            """, unsafe_allow_html=True)
+
+            # Medidor semicircular (Plotly)
+            st.plotly_chart(gauge_plotly(score, title=f"{lvl} · {tag}", color=DIMENSIONES[d]["color"]),
+                            use_container_width=True)
+
+            st.markdown("""
                 <div class="dim-grid">
                   <div class="dim-section">
                     <h4>Descripción</h4>
-                    <p class="small">{DIMENSIONES[d]["desc"]}</p>
+                    <p class="small">""" + DIMENSIONES[d]["desc"] + """</p>
                     <h4>Explicativo del KPI</h4>
-                    <p class="small">{expl}</p>
+                    <p class="small">""" + expl + """</p>
                   </div>
-
-                  <div class="dim-section">
-                    <h4>Fortalezas (laborales)</h4>
-                    <ul class="dim-list">
-                      {''.join([f"<li>✅ {x}</li>" for x in f])}
-                    </ul>
-                  </div>
-
-                  <div class="dim-section">
-                    <h4>Riesgos / Cosas a cuidar</h4>
-                    <ul class="dim-list">
-                      {''.join([f"<li>⚠️ {x}</li>" for x in r])}
-                    </ul>
-                  </div>
-
-                  <div class="dim-section">
-                    <h4>Recomendaciones</h4>
-                    <ul class="dim-list">
-                      {''.join([f"<li>🛠️ {x}</li>" for x in recs])}
-                    </ul>
-                  </div>
-
-                  <div class="dim-section">
-                    <h4>Roles sugeridos</h4>
-                    <ul class="dim-list">
-                      {''.join([f"<li>🎯 {x}</li>" for x in roles])}
-                    </ul>
-                  </div>
-
-                  <div class="dim-section">
-                    <h4>No recomendado para</h4>
-                    <ul class="dim-list">
-                      {''.join([f"<li>⛔ {x}</li>" for x in (not_apt if not_apt else ["—"])])}
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
             """, unsafe_allow_html=True)
+
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                st.markdown("**✅ Fortalezas (laborales)**")
+                for x in f: st.markdown(f"- {x}")
+            with c2:
+                st.markdown("**⚠️ Riesgos / Cosas a cuidar**")
+                for x in r: st.markdown(f"- {x}")
+            with c3:
+                st.markdown("**🛠️ Recomendaciones**")
+                for x in recs: st.markdown(f"- {x}")
+
+            c4, c5 = st.columns(2)
+            with c4:
+                st.markdown("**🎯 Roles sugeridos**")
+                for x in roles: st.markdown(f"- {x}")
+            with c5:
+                st.markdown("**⛔ No recomendado para**")
+                if not_apt:
+                    for x in not_apt: st.markdown(f"- {x}")
+                else:
+                    st.markdown("- —")
+
+            st.markdown("</div></div></div>", unsafe_allow_html=True)
+            st.markdown("")
 
     st.markdown("---")
     st.subheader("📥 Exportar informe")
@@ -842,11 +891,12 @@ def view_resultados():
     if HAS_MPL:
         pdf_bytes = build_pdf(res, st.session_state.fecha)
         st.download_button(
-            "⬇️ Descargar PDF (servidor)",
+            "⬇️ Descargar PDF (con medidores)",
             data=pdf_bytes,
             file_name="Informe_BigFive_Laboral.pdf",
             mime="application/pdf",
-            use_container_width=True
+            use_container_width=True,
+            type="primary"
         )
     else:
         html_bytes = build_html(res, st.session_state.fecha)
@@ -855,9 +905,10 @@ def view_resultados():
             data=html_bytes,
             file_name="Informe_BigFive_Laboral.html",
             mime="text/html",
-            use_container_width=True
+            use_container_width=True,
+            type="primary"
         )
-        st.caption("Abre el HTML y usa “Imprimir → Guardar como PDF”. (Si instalas matplotlib obtendrás PDF directo.)")
+        st.caption("Instala matplotlib para obtener el PDF directo con medidores.")
 
     st.markdown("---")
     if st.button("🔄 Nueva evaluación", type="primary", use_container_width=True):
@@ -875,6 +926,9 @@ if st.session_state.stage == "inicio":
 elif st.session_state.stage == "test":
     view_test()
 else:
+    # Entramos aquí si se completó o si el usuario recargó tras finalizar
+    if st.session_state.fecha is None:
+        st.session_state.fecha = datetime.now().strftime("%d/%m/%Y %H:%M")
     view_resultados()
 
 # Rerun único si el callback de la radio lo marcó
