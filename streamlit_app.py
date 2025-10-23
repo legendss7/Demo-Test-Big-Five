@@ -462,15 +462,22 @@ def pantalla_resultados():
     # Visualizaciones
     st.markdown("<div class='section-title'>Visualizaciones del perfil</div>", unsafe_allow_html=True)
     # Radar
-    fig_radar = go.Figure()
-    fig_radar.add_trace(go.Scat terpolar(
-        r=values,
-        theta=[f"{DIMENSIONES[d]['code']} {d}" for d in order],
-        fill='toself', name='Perfil',
-        line=dict(width=2, color="#111"),
-        fillcolor='rgba(17,17,17,0.08)', marker=dict(size=7, color="#111")
-    ))
-    fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100])), showlegend=False, height=520, template="plotly_white")
+  fig_radar = go.Figure()
+    fig_radar.add_trace(go.Scatterpolar(
+    r=values,
+    theta=[f"{DIMENSIONES[d]['code']} {d}" for d in order],
+    fill='toself',
+    name='Perfil',
+    line=dict(width=2, color="#111"),
+    fillcolor='rgba(17,17,17,0.08)',
+    marker=dict(size=7, color="#111")
+))
+fig_radar.update_layout(
+    polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
+    showlegend=False,
+    height=520,
+    template="plotly_white"
+)
 
     # Barras
     df_bar = pd.DataFrame({"Dimensión": order, "Puntuación": values}).sort_values("Puntuación", ascending=True)
@@ -625,3 +632,4 @@ elif st.session_state.stage == "test":
     pantalla_test()
 else:
     pantalla_resultados()
+
