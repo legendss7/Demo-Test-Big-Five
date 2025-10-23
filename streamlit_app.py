@@ -1,759 +1,883 @@
-# -*- coding: utf-8 -*-
+# ================================================================
+#  Big Five (OCEAN) — Evaluación Laboral PRO (sin doble click)
+#  Versión con análisis por dimensión mejorado (colores, estructura,
+#  más detalle y “No recomendado para”)
+# ================================================================
 import streamlit as st
-import numpy as np
 import pandas as pd
+import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime
+from io import BytesIO
 
-# ========= CONFIG =========
+# Intento usar matplotlib (para PDF). Si no está, habrá fallback a HTML.
+HAS_MPL = False
+try:
+    import matplotlib.pyplot as plt
+    from matplotlib.backends.backend_pdf import PdfPages
+    from matplotlib.patches import FancyBboxPatch
+    HAS_MPL = True
+except Exception:
+    HAS_MPL = False
+
+# ---------------------------------------------------------------
+# Config general
+# ---------------------------------------------------------------
 st.set_page_config(
-    page_title="Test Big Five (OCEAN) · Evaluación Profesional",
+    page_title="Big Five PRO | Evaluación Laboral",
     page_icon="🧠",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
-# ========= ESTILO GLOBAL (blanco/negro + toques suaves) =========
-# Sin barra lateral, tipografía limpia y tarjetas suaves
-BASE_CSS = """
+# ---------------------------------------------------------------
+# Estilos: fondo blanco, tipografías y UI suave + tarjetas color pastel
+# ---------------------------------------------------------------
+st.markdown("""
 <style>
-    /* Global */
-    .stApp { background: #ffffff; color: #111111; }
-    h1, h2, h3, h4, h5 { color: #111; }
-    .big-title { font-size: 2.0rem; font-weight: 800; margin: 0 0 4px 0;}
-    .dim-badge { font-size: 0.95rem; letter-spacing: .5px; opacity:.85; }
-    .question { font-size: 1.35rem; font-weight: 700; margin: 10px 0 6px 0; }
-    .soft-card {border: 1px solid #eee; background: #fff; border-radius: 14px; padding: 16px;}
-    .kpi-card {border: 1px solid #eee; background: #fff; border-radius: 12px; padding: 14px; min-height: 92px;}
-    .chip { display:inline-block; padding:4px 10px; border-radius:999px; background:#f3f3f3; font-size:.85rem; }
-    .section-title { font-weight:800; font-size:1.2rem; margin: 6px 0 4px 0;}
-    .subtle { color:#444; font-size:.95rem; }
-    .divider { border-top: 1px solid #eee; margin: 18px 0; }
-    /* Botones: negros sobrios, contrastados */
-    div.stButton > button[kind="primary"] { background:#111 !important; color:#fff !important; border-radius:10px; }
-    div.stButton > button { border-radius:10px; }
-    /* Ocultar barra lateral si existiera */
-    section[data-testid="stSidebar"] { display:none !important; }
-    /* Tab headers más claros */
-    div[data-baseweb="tab-list"] { gap: 4px; }
-</style>
-"""
-st.markdown(BASE_CSS, unsafe_allow_html=True)
+/* Ocultar sidebar */
+[data-testid="stSidebar"] { display:none !important; }
 
-# ========= MODELO BIG FIVE =========
+/* Base */
+html, body, [data-testid="stAppViewContainer"]{
+  background:#ffffff !important; color:#111 !important;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+}
+.block-container{ max-width:1200px; padding-top:0.8rem; padding-bottom:2rem; }
+
+/* Títulos grandes y animados para dimensión */
+.dim-title{
+  font-size:clamp(2.2rem, 5vw, 3.2rem);
+  font-weight:900; letter-spacing:.2px; line-height:1.12;
+  margin:.2rem 0 .6rem 0;
+  animation: slideIn .3s ease-out both;
+}
+@keyframes slideIn{
+  from{ transform: translateY(6px); opacity:0; }
+  to{ transform: translateY(0); opacity:1; }
+}
+.dim-desc{ margin:.1rem 0 1rem 0; opacity:.9; }
+
+/* Tarjeta */
+.card{
+  border:1px solid #eee; border-radius:14px; background:#fff;
+  box-shadow: 0 2px 0 rgba(0,0,0,0.03); padding:18px;
+}
+
+/* KPIs */
+.kpi-grid{
+  display:grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr));
+  gap:12px; margin:10px 0 6px 0;
+}
+.kpi{
+  border:1px solid #eee; border-radius:14px; background:#fff; padding:16px;
+  position:relative; overflow:hidden;
+}
+.kpi::after{
+  content:""; position:absolute; inset:0;
+  background: linear-gradient(120deg, rgba(255,255,255,0) 0%,
+    rgba(240,240,240,0.7) 45%, rgba(255,255,255,0) 90%);
+  transform: translateX(-100%);
+  animation: shimmer 2s ease-in-out 1;
+}
+@keyframes shimmer { to{ transform: translateX(100%);} }
+.kpi .label{ font-size:.95rem; opacity:.85; }
+.kpi .value{ font-size:2.2rem; font-weight:900; line-height:1; }
+
+/* “count-up” visual declarativo */
+.countup[data-target]::after{ content: attr(data-target); }
+
+/* Expander */
+details, [data-testid="stExpander"]{
+  background:#fff; border:1px solid #eee; border-radius:12px;
+}
+
+/* Tabla */
+[data-testid="stDataFrame"] div[role="grid"]{ font-size:0.95rem; }
+
+/* Botones */
+button[kind="primary"], button[kind="secondary"]{ width:100%; }
+
+/* Chips */
+.tag{ display:inline-block; padding:.2rem .6rem; border:1px solid #eee; border-radius:999px; font-size:.82rem; }
+hr{ border:none; border-top:1px solid #eee; margin:16px 0; }
+
+/* Paleta pastel por dimensión (encabezados y badges) */
+.pastel-O { background:#F0F7FF; border-color:#E0EEFF; }
+.pastel-C { background:#F7FFF2; border-color:#E9FBE0; }
+.pastel-E { background:#FFF6F2; border-color:#FFE7DE; }
+.pastel-A { background:#F9F6FF; border-color:#ECE6FF; }
+.pastel-N { background:#F2FBFF; border-color:#E5F7FF; }
+
+/* Encabezado de la tarjeta de análisis por dimensión */
+.dim-card{
+  border:1px solid #eee; border-radius:14px; overflow:hidden; background:#fff;
+}
+.dim-card-header{
+  padding:14px 16px; display:flex; align-items:center; gap:10px; border-bottom:1px solid #eee;
+}
+.dim-chip {
+  font-weight:800; padding:.2rem .6rem; border-radius:999px; border:1px solid rgba(0,0,0,.06);
+  background:#fff;
+}
+.dim-title-row{ display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+.dim-title-name{ font-size:1.2rem; font-weight:800; margin:0; }
+.dim-score{ font-size:1.1rem; font-weight:800; }
+.dim-body{ padding:16px; }
+.dim-grid{
+  display:grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); gap:12px;
+}
+.dim-section{ border:1px solid #eee; border-radius:12px; padding:12px; background:#fff; }
+.dim-section h4{ margin:.2rem 0 .4rem 0; font-size:1rem; }
+.dim-list{ margin:.2rem 0; padding-left:18px; }
+.dim-list li{ margin:.15rem 0; }
+
+/* Badges nivel */
+.badge{
+  display:inline-flex; align-items:center; gap:6px; padding:.25rem .55rem; font-size:.82rem;
+  border-radius:999px; border:1px solid #eaeaea; background:#fafafa;
+}
+
+/* Pequeño tip de accesibilidad visual */
+.small{ font-size:0.95rem; opacity:.9; }
+</style>
+""", unsafe_allow_html=True)
+
+# ---------------------------------------------------------------
+# Definiciones Big Five
+# ---------------------------------------------------------------
+def reverse_score(v:int)->int: return 6 - v
+
+# Agregamos iconos y paleta por dimensión
 DIMENSIONES = {
     "Apertura a la Experiencia": {
-        "code": "O",
-        "desc": "Imaginación, curiosidad, creatividad y aprecio por lo nuevo.",
-        "color": "#8FB996",
+        "code":"O",
+        "icon":"💡",
+        "desc":"Curiosidad intelectual, creatividad y apertura al cambio.",
+        # Alta / Baja
+        "fort_high":[
+            "Genera ideas originales y puentes entre conceptos.",
+            "Explora nuevas metodologías con aprendizaje rápido.",
+            "Promueve mejora continua y experimentación controlada.",
+        ],
+        "risk_high":[
+            "Puede dispersarse en demasiadas líneas de trabajo.",
+            "Riesgo de sobre-innovar sin consolidar procesos.",
+            "Tendencia a aburrirse con tareas repetitivas.",
+        ],
+        "fort_low":[
+            "Constancia y apego a estándares probados.",
+            "Ejecución confiable en entornos estables.",
+        ],
+        "risk_low":[
+            "Resistencia al cambio y menor exploración conceptual.",
+            "Más dificultad para innovar en ambigüedad.",
+        ],
+        "recs_low":[
+            "Implementar micro-experimentos quincenales de 1h.",
+            "Exposición breve a nuevas herramientas (demo/POC).",
+        ],
+        "roles_high":["Innovación","I+D","Diseño","Estrategia","Consultoría"],
+        "roles_low":["Operaciones estandarizadas","Control de calidad"],
+        "no_apt_high":["Cargos ultra-rutinarios sin espacio creativo"],
+        "no_apt_low":["Laboratorios de innovación, estrategia corporativa"]
     },
     "Responsabilidad": {
-        "code": "C",
-        "desc": "Organización, disciplina, orientación a objetivos y confiabilidad.",
-        "color": "#A1C3D1",
+        "code":"C",
+        "icon":"🎯",
+        "desc":"Orden, planificación, disciplina y cumplimiento de objetivos.",
+        "fort_high":[
+            "Fiabilidad en plazos y calidad del entregable.",
+            "Excelente gestión del tiempo y priorización.",
+            "Documentación y control de procesos destacables.",
+        ],
+        "risk_high":[
+            "Perfeccionismo que retrasa entregas.",
+            "Rigidez ante cambios de última hora.",
+        ],
+        "fort_low":[
+            "Flexibilidad y adaptación rápida a imprevistos.",
+            "Espacio para creatividad sin autoexigencia excesiva.",
+        ],
+        "risk_low":[
+            "Procrastinación y baja tasa de finalización.",
+            "Desorden operativo si no hay supervisión.",
+        ],
+        "recs_low":[
+            "Timeboxing diario y checklist de 3 prioridades.",
+            "Revisión semanal con métricas de finalización.",
+        ],
+        "roles_high":["Gestión de Proyectos","Finanzas","Auditoría","Operaciones"],
+        "roles_low":["Ideación temprana abierta"],
+        "no_apt_high":["Entornos caóticos sin procesos definidos"],
+        "no_apt_low":["PMO, compliance, control interno"]
     },
     "Extraversión": {
-        "code": "E",
-        "desc": "Sociabilidad, asertividad, energía y gusto por la interacción.",
-        "color": "#F2C6B4",
+        "code":"E",
+        "icon":"🗣️",
+        "desc":"Asertividad, sociabilidad y energía en interacción.",
+        "fort_high":[
+            "Networking sostenido y visibilidad del equipo.",
+            "Comunicación clara ante grupos y stakeholders.",
+            "Motivación del equipo en contextos colaborativos.",
+        ],
+        "risk_high":[
+            "Riesgo de monopolizar conversaciones.",
+            "Puede subvalorar la escucha profunda/activa.",
+        ],
+        "fort_low":[
+            "Profundidad de análisis y foco individual.",
+            "Comunicación escrita sólida y estructurada.",
+        ],
+        "risk_low":[
+            "Evita exposición y grandes audiencias.",
+            "Menor presencia en foros de decisión.",
+        ],
+        "recs_low":[
+            "Exposición gradual a presentaciones (micro-stands).",
+            "Reuniones 1:1 para construir confianza.",
+        ],
+        "roles_high":["Ventas","Relaciones Públicas","Liderazgo Comercial","BD"],
+        "roles_low":["Análisis","Investigación","Programación","Datos"],
+        "no_apt_high":["Roles de aislamiento con mínima interacción"],
+        "no_apt_low":["Puestos comerciales de alto contacto inmediato"]
     },
     "Amabilidad": {
-        "code": "A",
-        "desc": "Cooperación, empatía, confianza y respeto por los demás.",
-        "color": "#E8D6CB",
+        "code":"A",
+        "icon":"🤝",
+        "desc":"Colaboración, empatía y confianza.",
+        "fort_high":[
+            "Clima de confianza y cohesión en el equipo.",
+            "Gestión empática de conflictos.",
+            "Excelente experiencia de cliente/usuario.",
+        ],
+        "risk_high":[
+            "Evitar conversaciones difíciles o decir 'no'.",
+            "Difícil establecer límites en alta presión.",
+        ],
+        "fort_low":[
+            "Objetividad y firmeza en decisiones.",
+            "Negociación más dura con foco en métricas.",
+        ],
+        "risk_low":[
+            "Relaciones sensibles pueden deteriorarse.",
+            "Riesgo de fricción intraequipo si no hay tacto.",
+        ],
+        "recs_low":[
+            "Entrenar feedback con método SBI.",
+            "Establecer límites claros por escrito.",
+        ],
+        "roles_high":["RR.HH.","Customer Success","Mediación","Atención a clientes"],
+        "roles_low":["Negociación dura","Trading"],
+        "no_apt_high":["Roles donde se requiere confrontación permanente"],
+        "no_apt_low":["Facilitación, mediación, soporte sensible"]
     },
     "Estabilidad Emocional": {
-        "code": "N",
-        "desc": "Manejo del estrés, calma y resiliencia (opuesto a Neuroticismo).",
-        "color": "#D6EADF",
+        "code":"N",
+        "icon":"🧘",
+        "desc":"Gestión del estrés, resiliencia y calma bajo presión.",
+        "fort_high":[
+            "Serenidad en incidentes y crisis.",
+            "Recuperación rápida y foco en soluciones.",
+            "Juicio estable en incertidumbre.",
+        ],
+        "risk_high":[
+            "Subestimar señales de estrés ajeno.",
+            "Puede comunicar calma como frialdad.",
+        ],
+        "fort_low":[
+            "Sensibilidad que potencia empatía y creatividad.",
+        ],
+        "risk_low":[
+            "Rumiación, estrés elevado y fluctuaciones de ánimo.",
+            "Toma de decisiones afectada por presión.",
+        ],
+        "recs_low":[
+            "Técnicas 4-7-8 y pausas de respiración.",
+            "Rutina de sueño + journaling breve diario.",
+        ],
+        "roles_high":["Operaciones críticas","Dirección","Soporte incidentes","Compliance"],
+        "roles_low":["Ambientes caóticos sin soporte"],
+        "no_apt_high":["Roles donde se requiera hiper-empatía constante"],
+        "no_apt_low":["Puestos de alta presión sin acompañamiento"]
     },
 }
 DIM_LIST = list(DIMENSIONES.keys())
+LIKERT = {1:"Totalmente en desacuerdo", 2:"En desacuerdo", 3:"Neutral", 4:"De acuerdo", 5:"Totalmente de acuerdo"}
+LIK_KEYS = list(LIKERT.keys())
 
-ESCALA_LIKERT = {
-    1: "Totalmente en desacuerdo",
-    2: "En desacuerdo",
-    3: "Neutral",
-    4: "De acuerdo",
-    5: "Totalmente de acuerdo",
-}
-LIKERT = list(ESCALA_LIKERT.keys())
-
-def reverse_score(x: int) -> int:
-    return 6 - x
-
-# 10 preguntas por dimensión (5 directas + 5 inversas)
-# Puedes personalizarlas si lo deseas.
-PREGUNTAS = []
-# O
-PREGUNTAS += [
-    {"dim": "Apertura a la Experiencia", "key":"O1","text":"Disfruto aprendiendo conceptos nuevos.", "rev":False},
-    {"dim": "Apertura a la Experiencia", "key":"O2","text":"Tengo una imaginación muy activa.", "rev":False},
-    {"dim": "Apertura a la Experiencia", "key":"O3","text":"Me interesan el arte y la cultura.", "rev":False},
-    {"dim": "Apertura a la Experiencia", "key":"O4","text":"Me atraen los retos intelectuales.", "rev":False},
-    {"dim": "Apertura a la Experiencia", "key":"O5","text":"Valoro la creatividad y la originalidad.", "rev":False},
-    {"dim": "Apertura a la Experiencia", "key":"O6","text":"Prefiero la rutina a probar cosas nuevas.", "rev":True},
-    {"dim": "Apertura a la Experiencia", "key":"O7","text":"Rara vez reflexiono sobre ideas abstractas.", "rev":True},
-    {"dim": "Apertura a la Experiencia", "key":"O8","text":"No me interesan debates sobre ideas.", "rev":True},
-    {"dim": "Apertura a la Experiencia", "key":"O9","text":"Me cuesta aceptar cambios en métodos.", "rev":True},
-    {"dim": "Apertura a la Experiencia", "key":"O10","text":"Evito experiencias poco conocidas.", "rev":True},
+# 50 ítems (10 por dimensión; 5 directos, 5 invertidos)
+QUESTIONS = [
+    # O
+    {"text":"Tengo una imaginación muy activa.","dim":"Apertura a la Experiencia","key":"O1","rev":False},
+    {"text":"Me atraen ideas nuevas y complejas.","dim":"Apertura a la Experiencia","key":"O2","rev":False},
+    {"text":"Disfruto del arte y la cultura.","dim":"Apertura a la Experiencia","key":"O3","rev":False},
+    {"text":"Busco experiencias poco convencionales.","dim":"Apertura a la Experiencia","key":"O4","rev":False},
+    {"text":"Valoro la creatividad sobre la rutina.","dim":"Apertura a la Experiencia","key":"O5","rev":False},
+    {"text":"Prefiero mantener hábitos que probar cosas nuevas.","dim":"Apertura a la Experiencia","key":"O6","rev":True},
+    {"text":"Las discusiones filosóficas me parecen poco útiles.","dim":"Apertura a la Experiencia","key":"O7","rev":True},
+    {"text":"Rara vez reflexiono sobre conceptos abstractos.","dim":"Apertura a la Experiencia","key":"O8","rev":True},
+    {"text":"Me inclino por lo tradicional más que por lo original.","dim":"Apertura a la Experiencia","key":"O9","rev":True},
+    {"text":"Evito cambiar mis hábitos establecidos.","dim":"Apertura a la Experiencia","key":"O10","rev":True},
+    # C
+    {"text":"Estoy bien preparado/a para mis tareas.","dim":"Responsabilidad","key":"C1","rev":False},
+    {"text":"Cuido los detalles al trabajar.","dim":"Responsabilidad","key":"C2","rev":False},
+    {"text":"Cumplo mis compromisos y plazos.","dim":"Responsabilidad","key":"C3","rev":False},
+    {"text":"Sigo un plan y un horario definidos.","dim":"Responsabilidad","key":"C4","rev":False},
+    {"text":"Me exijo altos estándares de calidad.","dim":"Responsabilidad","key":"C5","rev":False},
+    {"text":"Dejo mis cosas desordenadas.","dim":"Responsabilidad","key":"C6","rev":True},
+    {"text":"Evito responsabilidades cuando puedo.","dim":"Responsabilidad","key":"C7","rev":True},
+    {"text":"Me distraigo con facilidad.","dim":"Responsabilidad","key":"C8","rev":True},
+    {"text":"Olvido colocar las cosas en su lugar.","dim":"Responsabilidad","key":"C9","rev":True},
+    {"text":"Aplazo tareas importantes.","dim":"Responsabilidad","key":"C10","rev":True},
+    # E
+    {"text":"Disfruto ser visible en reuniones.","dim":"Extraversión","key":"E1","rev":False},
+    {"text":"Me siento a gusto con personas nuevas.","dim":"Extraversión","key":"E2","rev":False},
+    {"text":"Busco la compañía de otras personas.","dim":"Extraversión","key":"E3","rev":False},
+    {"text":"Participo activamente en conversaciones.","dim":"Extraversión","key":"E4","rev":False},
+    {"text":"Me energiza compartir con otros.","dim":"Extraversión","key":"E5","rev":False},
+    {"text":"Prefiero estar solo/a que rodeado/a de gente.","dim":"Extraversión","key":"E6","rev":True},
+    {"text":"Soy más bien reservado/a y callado/a.","dim":"Extraversión","key":"E7","rev":True},
+    {"text":"Me cuesta expresarme ante grupos grandes.","dim":"Extraversión","key":"E8","rev":True},
+    {"text":"Prefiero actuar en segundo plano.","dim":"Extraversión","key":"E9","rev":True},
+    {"text":"Me agotan las interacciones sociales prolongadas.","dim":"Extraversión","key":"E10","rev":True},
+    # A
+    {"text":"Empatizo con las emociones de los demás.","dim":"Amabilidad","key":"A1","rev":False},
+    {"text":"Me preocupo por el bienestar ajeno.","dim":"Amabilidad","key":"A2","rev":False},
+    {"text":"Trato a otros con respeto y consideración.","dim":"Amabilidad","key":"A3","rev":False},
+    {"text":"Ayudo sin esperar nada a cambio.","dim":"Amabilidad","key":"A4","rev":False},
+    {"text":"Confío en las buenas intenciones de la gente.","dim":"Amabilidad","key":"A5","rev":False},
+    {"text":"No me interesa demasiado la gente.","dim":"Amabilidad","key":"A6","rev":True},
+    {"text":"Sospecho de las intenciones ajenas.","dim":"Amabilidad","key":"A7","rev":True},
+    {"text":"A veces soy poco considerado/a.","dim":"Amabilidad","key":"A8","rev":True},
+    {"text":"Pienso primero en mí antes que en otros.","dim":"Amabilidad","key":"A9","rev":True},
+    {"text":"Los problemas de otros no me afectan mucho.","dim":"Amabilidad","key":"A10","rev":True},
+    # N
+    {"text":"Me mantengo calmado/a bajo presión.","dim":"Estabilidad Emocional","key":"N1","rev":False},
+    {"text":"Rara vez me siento ansioso/a o estresado/a.","dim":"Estabilidad Emocional","key":"N2","rev":False},
+    {"text":"Soy emocionalmente estable.","dim":"Estabilidad Emocional","key":"N3","rev":False},
+    {"text":"Me recupero rápido de contratiempos.","dim":"Estabilidad Emocional","key":"N4","rev":False},
+    {"text":"Me siento seguro/a de mí mismo/a.","dim":"Estabilidad Emocional","key":"N5","rev":False},
+    {"text":"Me preocupo demasiado por las cosas.","dim":"Estabilidad Emocional","key":"N6","rev":True},
+    {"text":"Me irrito con facilidad.","dim":"Estabilidad Emocional","key":"N7","rev":True},
+    {"text":"Con frecuencia me siento triste.","dim":"Estabilidad Emocional","key":"N8","rev":True},
+    {"text":"Tengo cambios de ánimo frecuentes.","dim":"Estabilidad Emocional","key":"N9","rev":True},
+    {"text":"El estrés me sobrepasa.","dim":"Estabilidad Emocional","key":"N10","rev":True},
 ]
-# C
-PREGUNTAS += [
-    {"dim": "Responsabilidad", "key":"C1","text":"Cumplo plazos y compromisos.", "rev":False},
-    {"dim": "Responsabilidad", "key":"C2","text":"Soy organizado/a en mis tareas.", "rev":False},
-    {"dim": "Responsabilidad", "key":"C3","text":"Planifico antes de ejecutar.", "rev":False},
-    {"dim": "Responsabilidad", "key":"C4","text":"Soy constante y disciplinado/a.", "rev":False},
-    {"dim": "Responsabilidad", "key":"C5","text":"Me esfuerzo por la excelencia.", "rev":False},
-    {"dim": "Responsabilidad", "key":"C6","text":"Procrastino actividades importantes.", "rev":True},
-    {"dim": "Responsabilidad", "key":"C7","text":"Me distraigo con facilidad.", "rev":True},
-    {"dim": "Responsabilidad", "key":"C8","text":"Evito responsabilidades cuando puedo.", "rev":True},
-    {"dim": "Responsabilidad", "key":"C9","text":"Dejo mi área de trabajo desordenada.", "rev":True},
-    {"dim": "Responsabilidad", "key":"C10","text":"Me cuesta seguir procedimientos.", "rev":True},
-]
-# E
-PREGUNTAS += [
-    {"dim": "Extraversión", "key":"E1","text":"Disfruto hablar en público.", "rev":False},
-    {"dim": "Extraversión", "key":"E2","text":"Tomo la iniciativa en grupos.", "rev":False},
-    {"dim": "Extraversión", "key":"E3","text":"Me energiza trabajar con otras personas.", "rev":False},
-    {"dim": "Extraversión", "key":"E4","text":"Me siento cómodo/a con desconocidos.", "rev":False},
-    {"dim": "Extraversión", "key":"E5","text":"Me gusta liderar conversaciones.", "rev":False},
-    {"dim": "Extraversión", "key":"E6","text":"Prefiero trabajar en silencio y solo/a.", "rev":True},
-    {"dim": "Extraversión", "key":"E7","text":"Evito interacciones sociales prolongadas.", "rev":True},
-    {"dim": "Extraversión", "key":"E8","text":"Soy una persona más bien reservada.", "rev":True},
-    {"dim": "Extraversión", "key":"E9","text":"Me cuesta expresar mis puntos en grupos.", "rev":True},
-    {"dim": "Extraversión", "key":"E10","text":"Prefiero observar a participar.", "rev":True},
-]
-# A
-PREGUNTAS += [
-    {"dim": "Amabilidad", "key":"A1","text":"Empatizo con facilidad.", "rev":False},
-    {"dim": "Amabilidad", "key":"A2","text":"Me importa el bienestar de otros.", "rev":False},
-    {"dim": "Amabilidad", "key":"A3","text":"Colaboro y busco consensos.", "rev":False},
-    {"dim": "Amabilidad", "key":"A4","text":"Confío en la buena intención de los demás.", "rev":False},
-    {"dim": "Amabilidad", "key":"A5","text":"Mantengo respeto en desacuerdos.", "rev":False},
-    {"dim": "Amabilidad", "key":"A6","text":"Soy cínico/a respecto a las intenciones ajenas.", "rev":True},
-    {"dim": "Amabilidad", "key":"A7","text":"Puedo ser directo/a hasta lo brusco.", "rev":True},
-    {"dim": "Amabilidad", "key":"A8","text":"Me cuesta ponerme en el lugar del otro.", "rev":True},
-    {"dim": "Amabilidad", "key":"A9","text":"Suelo priorizar mis intereses por encima del equipo.", "rev":True},
-    {"dim": "Amabilidad", "key":"A10","text":"La cooperación no es una prioridad para mí.", "rev":True},
-]
-# N (Estabilidad Emocional)
-PREGUNTAS += [
-    {"dim": "Estabilidad Emocional", "key":"N1","text":"Mantengo la calma bajo presión.", "rev":False},
-    {"dim": "Estabilidad Emocional", "key":"N2","text":"Me recupero rápido de contratiempos.", "rev":False},
-    {"dim": "Estabilidad Emocional", "key":"N3","text":"Gestiono el estrés de forma saludable.", "rev":False},
-    {"dim": "Estabilidad Emocional", "key":"N4","text":"Suelo mantener el foco aun con presión.", "rev":False},
-    {"dim": "Estabilidad Emocional", "key":"N5","text":"Me siento seguro/a de mis capacidades.", "rev":False},
-    {"dim": "Estabilidad Emocional", "key":"N6","text":"Me preocupo en exceso por pequeñas cosas.", "rev":True},
-    {"dim": "Estabilidad Emocional", "key":"N7","text":"Me irrito con facilidad.", "rev":True},
-    {"dim": "Estabilidad Emocional", "key":"N8","text":"Mi estado de ánimo fluctúa con frecuencia.", "rev":True},
-    {"dim": "Estabilidad Emocional", "key":"N9","text":"El estrés me sobrepasa habitualmente.", "rev":True},
-    {"dim": "Estabilidad Emocional", "key":"N10","text":"Me cuesta recuperar la calma.", "rev":True},
-]
+KEY2IDX = {q["key"]:i for i,q in enumerate(QUESTIONS)}
 
-# ========= STATE =========
-if "stage" not in st.session_state:
-    st.session_state.stage = "inicio"
-if "q_index" not in st.session_state:
-    st.session_state.q_index = 0
-if "answers" not in st.session_state:
-    st.session_state.answers = {p["key"]: None for p in PREGUNTAS}
-if "result" not in st.session_state:
-    st.session_state.result = None
-if "fecha" not in st.session_state:
-    st.session_state.fecha = None
+# ---------------------------------------------------------------
+# Estado
+# ---------------------------------------------------------------
+if "stage" not in st.session_state: st.session_state.stage = "inicio"  # inicio | test | resultados
+if "q_idx" not in st.session_state: st.session_state.q_idx = 0
+if "answers" not in st.session_state: st.session_state.answers = {q["key"]:None for q in QUESTIONS}
+if "fecha" not in st.session_state: st.session_state.fecha = None
+if "_needs_rerun" not in st.session_state: st.session_state._needs_rerun = False
 
-# ========= UTIL =========
-def as_percent(value_1_to_5: float) -> float:
-    # 1..5 -> 0..100
-    return round(((value_1_to_5 - 1.0) / 4.0) * 100.0, 1)
+# ---------------------------------------------------------------
+# Cálculo de resultados
+# ---------------------------------------------------------------
+def compute_scores(answers:dict)->dict:
+    buckets = {d:[] for d in DIM_LIST}
+    for q in QUESTIONS:
+        raw = answers.get(q["key"])
+        v = 3 if raw is None else (reverse_score(raw) if q["rev"] else raw)
+        buckets[q["dim"]].append(v)
+    out = {}
+    for d, vals in buckets.items():
+        avg = np.mean(vals)
+        perc = ((avg - 1) / 4.0) * 100
+        out[d] = round(float(perc), 1)
+    return out
 
-def compute_scores(answers: dict) -> dict:
-    per_dim = {d: [] for d in DIM_LIST}
-    for p in PREGUNTAS:
-        v = answers.get(p["key"])
-        if v is None:
-            v = 3
-        if p["rev"]:
-            v = reverse_score(v)
-        per_dim[p["dim"]].append(v)
-    res = {}
-    for d, vals in per_dim.items():
-        avg = float(np.mean(vals)) if vals else 3.0
-        res[d] = as_percent(avg)
-    return res
+def level_label(score:float):
+    if score>=75: return "Muy Alto","Dominante"
+    if score>=60: return "Alto","Marcado"
+    if score>=40: return "Promedio","Moderado"
+    if score>=25: return "Bajo","Suave"
+    return "Muy Bajo","Mínimo"
 
-def level_label(score: float):
-    if score >= 75: return "Muy Alto", "Dominante"
-    if score >= 60: return "Alto", "Marcado"
-    if score >= 40: return "Promedio", "Moderado"
-    if score >= 25: return "Bajo", "Suave"
-    return "Muy Bajo", "Mínimo"
+def dimension_profile(d:str, score:float):
+    ds = DIMENSIONES[d]
+    if score>=60:
+        f = ds["fort_high"] + [
+            "Capacidad de modelar buenas prácticas para pares.",
+            "Eleva el estándar del equipo en esa dimensión."
+        ]
+        r = ds["risk_high"] + [
+            "Si no se regula, impacta foco/tiempos de otros.",
+        ]
+        rec = [
+            "Definir OKRs y criterios de cierre por sprint.",
+            "Hitos intermedios con aceptación por pares.",
+            "Revisión quincenal para calibrar foco/impacto."
+        ]
+        roles = ds["roles_high"]
+        not_apt = ds.get("no_apt_high", [])
+        expl = "KPI alto: tu conducta típica favorece el desempeño cuando el rol exige este rasgo como palanca principal."
+    elif score<40:
+        f = ds["fort_low"] + [
+            "Estabilidad de ejecución en límites conocidos."
+        ]
+        r = ds["risk_low"] + [
+            "Puede requerir soporte explícito en entornos de presión/ambigüedad."
+        ]
+        rec = ds["recs_low"] + [
+            "Rutina breve semanal de reflexión de aprendizajes.",
+            "Definir 1 hábito palanca (2 min/día) durante 21 días."
+        ]
+        roles = ds["roles_low"]
+        not_apt = ds.get("no_apt_low", [])
+        expl = "KPI bajo: tu estilo se sitúa en el extremo opuesto; útil en ciertos contextos, con riesgos en otros si no hay compensaciones."
+    else:
+        f = ["Balance situacional entre ambos extremos",
+             "Capacidad de lectura del contexto antes de actuar"]
+        r = ["Variabilidad entre equipos/líderes; alinear expectativas",
+             "Riesgo de ambivalencia si faltan métricas claras"]
+        rec = ["Definir escenarios de cuándo 'subir' o 'bajar' este rasgo",
+               "Feedback mensual de 360° enfocado en esta dimensión"]
+        roles = ds["roles_high"][:2] + ds["roles_low"][:1]
+        not_apt = []
+        expl = "KPI medio: perfil flexible; puede optimizarse con reglas simples de activación según el entorno."
+    return f, r, rec, roles, not_apt, expl
 
-# ========= GAUGES (SEMICIRCULAR PLOTLY) =========
-def semi_gauge_plotly(value: float, title: str = "", color="#6D597A"):
-    """
-    Medidor semicircular (0–100) construido con sectores + aguja.
-    Colores suaves por rango.
-    """
-    v = max(0, min(100, float(value)))
+# ---------------------------------------------------------------
+# Auto-avance: callback SIN rerun (marcamos bandera)
+# ---------------------------------------------------------------
+def on_answer_change(qkey:str):
+    st.session_state.answers[qkey] = st.session_state.get(f"resp_{qkey}")
+    idx = KEY2IDX[qkey]
+    if idx < len(QUESTIONS)-1:
+        st.session_state.q_idx = idx + 1
+    else:
+        st.session_state.stage = "resultados"
+        st.session_state.fecha = datetime.now().strftime("%d/%m/%Y %H:%M")
+    st.session_state._needs_rerun = True  # se ejecuta al final del ciclo
 
-    # Sectores (0-25-40-60-75-100) -> 5 segmentos
-    bounds = [0, 25, 40, 60, 75, 100]
-    colors = ["#fde2e1", "#fff0c2", "#e9f2fb", "#e7f6e8", "#d9f2db"]
-    vals = [bounds[i+1]-bounds[i] for i in range(len(bounds)-1)]
-
+# ---------------------------------------------------------------
+# Gráficos
+# ---------------------------------------------------------------
+def plot_radar(res:dict):
+    order = list(res.keys())
+    vals = [res[d] for d in order]
     fig = go.Figure()
-
-    fig.add_trace(go.Pie(
-        values=vals,
-        hole=0.6,
-        rotation=180,
-        direction="clockwise",
-        text=[f"{bounds[i]}–{bounds[i+1]}" for i in range(5)],
-        textinfo="none",
-        marker=dict(colors=colors, line=dict(color="#ffffff", width=1)),
-        hoverinfo="skip",
-        showlegend=False,
-        sort=False
+    fig.add_trace(go.Scatterpolar(
+        r=vals, theta=[f"{DIMENSIONES[d]['code']} {d}" for d in order],
+        fill='toself', name='Perfil',
+        line=dict(width=2, color="#6D597A"),
+        fillcolor='rgba(109, 89, 122, .12)',
+        marker=dict(size=7, color="#6D597A")
     ))
-
-    # Aguja
-    theta = (180 * (v/100.0))  # 0->100 maps 0..180 degrees
-    # End point (in unit circle coords)
-    import math
-    r = 0.95
-    x0, y0 = 0.5, 0.5
-    xe = x0 + r*math.cos(math.radians(180 - theta))
-    ye = y0 + r*math.sin(math.radians(180 - theta))
-
-    fig.add_shape(
-        type="line", x0=x0, y0=y0, x1=xe, y1=ye,
-        line=dict(color=color, width=4)
-    )
-    fig.add_shape(
-        type="circle", x0=x0-0.02, y0=y0-0.02, x1=x0+0.02, y1=y0+0.02,
-        line=dict(color=color), fillcolor=color
-    )
-
-    fig.update_layout(
-        annotations=[
-            dict(text=f"<b>{v:.1f}</b>", x=0.5, y=0.32, showarrow=False, font=dict(size=24, color="#111")),
-            dict(text=title, x=0.5, y=0.16, showarrow=False, font=dict(size=13, color="#333")),
-        ],
-        margin=dict(l=10, r=10, t=10, b=10),
-        showlegend=False,
-        height=220
-    )
+    fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0,100])),
+                      showlegend=False, height=520, template="plotly_white")
     return fig
 
-# ========= PDF (matplotlib) con medidores semicirculares =========
-def build_pdf(results: dict, fecha: str) -> bytes:
-    """
-    PDF A4 con:
-    - Portada + KPIs
-    - Tabla resumen + barras
-    - Páginas por dimensión con medidor semicircular y análisis laboral
-    """
-    import numpy as np
-    import matplotlib.pyplot as plt
-    from io import BytesIO
-    from matplotlib.backends.backend_pdf import PdfPages
-    from matplotlib.patches import Wedge, Circle, FancyBboxPatch
+def plot_bar(res:dict):
+    palette = ["#81B29A","#F2CC8F","#E07A5F","#9C6644","#6D597A"]
+    df = pd.DataFrame({"Dimensión":list(res.keys()),"Puntuación":list(res.values())}).sort_values("Puntuación")
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        y=df["Dimensión"], x=df["Puntuación"], orientation='h',
+        marker=dict(color=[palette[i%len(palette)] for i in range(len(df))]),
+        text=[f"{v:.1f}" for v in df["Puntuación"]], textposition="outside"
+    ))
+    fig.update_layout(height=520, template="plotly_white",
+                      xaxis=dict(range=[0,105], title="Puntuación (0–100)"),
+                      yaxis=dict(title=""))
+    return fig, df
 
-    order = list(results.keys())
-    vals = np.array([results[d] for d in order], dtype=float)
-    avg = float(np.mean(vals))
-    std = float(np.std(vals, ddof=1)) if len(vals) > 1 else 0.0
-    rng = float(np.max(vals) - np.min(vals)) if len(vals) > 1 else 0.0
-    top_dim = max(results, key=results.get)
-    low_dim = min(results, key=results.get)
-
-    def semicircle(ax, value, cx=0.5, cy=0.5, r=0.45):
-        v = max(0, min(100, float(value)))
-        # bandas
-        bands = [(0,25,"#fde2e1"), (25,40,"#fff0c2"), (40,60,"#e9f2fb"), (60,75,"#e7f6e8"), (75,100,"#d9f2db")]
-        for a,b,c in bands:
-            ang1 = 180*(a/100.0)
-            ang2 = 180*(b/100.0)
-            w = Wedge((cx,cy), r, 180-ang2, 180-ang1, facecolor=c, edgecolor="#fff", lw=1)
-            ax.add_patch(w)
-        # aguja
-        import math
-        theta = math.radians(180*(v/100.0))
-        x2 = cx + r*0.95*math.cos(math.pi - theta)
-        y2 = cy + r*0.95*math.sin(math.pi - theta)
-        ax.plot([cx, x2], [cy, y2], color="#6D597A", lw=3)
-        ax.add_patch(Circle((cx,cy), 0.02, color="#6D597A"))
-        ax.text(cx, cy-0.12, f"{v:.1f}", ha="center", va="center", fontsize=16, color="#111")
+# ---------------------------------------------------------------
+# Exportar (PDF si hay MPL; HTML si no)
+# ---------------------------------------------------------------
+def build_pdf(res:dict, fecha:str)->bytes:
+    order = list(res.keys()); vals=[res[d] for d in order]
+    avg = np.mean(vals); std = np.std(vals, ddof=1) if len(vals)>1 else 0.0
+    rng = np.max(vals)-np.min(vals); top = max(res, key=res.get)
 
     buf = BytesIO()
     with PdfPages(buf) as pdf:
-        # PORTADA
-        fig = plt.figure(figsize=(8.27, 11.69))
-        ax = fig.add_axes([0,0,1,1]); ax.axis("off")
-        ax.text(.5,.95,"Informe Big Five — Evaluación Laboral", ha="center", fontsize=20, fontweight="bold")
-        ax.text(.5,.92,f"Fecha: {fecha}", ha="center", fontsize=11)
+        # Portada + KPIs
+        fig = plt.figure(figsize=(8.27,11.69))  # A4
+        ax = fig.add_axes([0,0,1,1]); ax.axis('off')
+        ax.text(.5,.94,"Informe Big Five — Contexto Laboral", ha='center', fontsize=20, fontweight='bold')
+        ax.text(.5,.91,f"Fecha: {fecha}", ha='center', fontsize=11)
 
-        # KPIs
-        def kpi(ax, x, y, w, h, title, val):
-            box = FancyBboxPatch((x,y), w,h, boxstyle="round,pad=0.02,rounding_size=0.02",
-                                 facecolor="#fff", edgecolor="#e6e6e6")
-            ax.add_patch(box)
-            ax.text(x+w*0.06, y+h*0.63, title, fontsize=10, color="#333")
-            ax.text(x+w*0.06, y+h*0.23, val, fontsize=20, fontweight="bold", color="#111")
+        def card(ax, x,y,w,h,title,val):
+            r = FancyBboxPatch((x,y), w,h, boxstyle="round,pad=0.012,rounding_size=0.018",
+                               edgecolor="#dddddd", facecolor="#ffffff")
+            ax.add_patch(r)
+            ax.text(x+w*0.06, y+h*0.60, title, fontsize=10, color="#333")
+            ax.text(x+w*0.06, y+h*0.25, f"{val}", fontsize=20, fontweight='bold')
 
-        Y0, H, W, GAP = .82, .10, .40, .02
-        kpi(ax, .06, Y0, W, H, "Promedio (0–100)", f"{avg:.1f}")
-        kpi(ax, .54, Y0, W, H, "Desviación estándar", f"{std:.2f}")
-        kpi(ax, .06, Y0-(H+GAP), W, H, "Rango entre dimensiones", f"{rng:.2f}")
-        kpi(ax, .54, Y0-(H+GAP), W, H, "Dimensión destacada", f"{top_dim}")
+        Y0 = .80; H = .10; W = .40; GAP = .02
+        card(ax, .06, Y0, W, H, "Promedio general (0–100)", f"{avg:.1f}")
+        card(ax, .54, Y0, W, H, "Desviación estándar", f"{std:.2f}")
+        card(ax, .06, Y0-(H+GAP), W, H, "Rango", f"{rng:.2f}")
+        card(ax, .54, Y0-(H+GAP), W, H, "Dimensión destacada", f"{top}")
 
-        # Resumen
-        ax.text(.06, .60, "Resumen profesional", fontsize=14, fontweight="bold")
-        bullets = [
-            f"Fortaleza clave: {top_dim} ({results[top_dim]:.1f})",
-            f"Área a potenciar: {low_dim} ({results[low_dim]:.1f})",
-            "Perfil global equilibrado" if 40 <= avg <= 60 else (
-                "Perfil con tendencia alta para ambientes exigentes" if avg>60 else
-                "Perfil conservador, ideal para entornos estables y normados"
-            ),
-            f"Variabilidad entre rasgos: DE={std:.2f} · Rango={rng:.2f}",
-        ]
-        yy = .56
-        for b in bullets:
-            ax.text(.08, yy, f"• {b}", fontsize=11); yy -= .03
-
-        pdf.savefig(fig, bbox_inches="tight"); plt.close(fig)
-
-        # TABLA + BARRAS
-        fig2 = plt.figure(figsize=(8.27, 11.69))
-        ax2 = fig2.add_axes([0,0,1,1]); ax2.axis("off")
-        ax2.text(.06,.96,"Tabla resumen de puntuaciones", fontsize=14, fontweight="bold")
-        y = .92
-        ax2.text(.06, y, "Cod.", fontsize=11, fontweight="bold")
-        ax2.text(.14, y, "Dimensión", fontsize=11, fontweight="bold")
-        ax2.text(.56, y, "Puntaje", fontsize=11, fontweight="bold")
-        ax2.text(.70, y, "Nivel", fontsize=11, fontweight="bold")
-        ax2.text(.82, y, "Etiqueta", fontsize=11, fontweight="bold")
-        y -= .03
+        ax.text(.5,.58,"Puntuaciones por dimensión", ha='center', fontsize=14, fontweight='bold')
+        ylist = .54
         for d in order:
-            lvl, tag = level_label(results[d])
-            ax2.text(.06, y, DIMENSIONES[d]["code"], fontsize=10)
-            ax2.text(.14, y, d, fontsize=10)
-            ax2.text(.56, y, f"{results[d]:.1f}", fontsize=10)
-            ax2.text(.70, y, f"{lvl}", fontsize=10)
-            ax2.text(.82, y, f"{tag}", fontsize=10)
-            y -= .026
+            ax.text(.1, ylist, f"{DIMENSIONES[d]['code']} — {d}: {res[d]:.1f}", fontsize=11)
+            ylist -= 0.03
+
+        pdf.savefig(fig, bbox_inches='tight'); plt.close(fig)
 
         # Barras
-        ax2.text(.06, y-.02, "Puntuaciones por dimensión", fontsize=14, fontweight="bold")
-        axbar = fig2.add_axes([.06, y-.42, .88, .36])
-        ypos = np.arange(len(order))[::-1]
-        vals_order = [results[d] for d in order]
-        axbar.barh(ypos, vals_order, color="#81B29A")
-        axbar.set_yticks(ypos); axbar.set_yticklabels(order)
-        axbar.set_xlim(0,100); axbar.set_xlabel("0–100")
-        for i,v in enumerate(vals_order):
-            axbar.text(v+1, i, f"{v:.1f}", va="center", fontsize=9)
-        pdf.savefig(fig2, bbox_inches="tight"); plt.close(fig2)
+        fig2 = plt.figure(figsize=(8.27,11.69))
+        a2 = fig2.add_subplot(111)
+        y = np.arange(len(order))
+        a2.barh(y, [res[d] for d in order], color="#81B29A")
+        a2.set_yticks(y); a2.set_yticklabels(order)
+        a2.set_xlim(0,100); a2.set_xlabel("Puntuación (0–100)")
+        a2.set_title("Puntuaciones por dimensión")
+        for i, v in enumerate([res[d] for d in order]):
+            a2.text(v+1, i, f"{v:.1f}", va='center', fontsize=9)
+        pdf.savefig(fig2, bbox_inches='tight'); plt.close(fig2)
 
-        # PÁGINAS POR DIMENSIÓN (con medidor)
+        # Análisis por dimensión (incluye No recomendado para)
         for d in order:
-            score = results[d]; lvl, tag = level_label(score)
-            fort, risk, recs, roles, notapt, expl = build_dimension_blocks(d, score)
+            score = res[d]; lvl, tag = level_label(score)
+            f, r, recs, roles, not_apt, expl = dimension_profile(d, score)
+            fig3 = plt.figure(figsize=(8.27,11.69)); ax3 = fig3.add_axes([0,0,1,1]); ax3.axis('off')
+            ax3.text(.5,.95, f"{DIMENSIONES[d]['code']} — {d}", ha='center', fontsize=16, fontweight='bold')
+            ax3.text(.5,.92, f"Puntuación: {score:.1f} · Nivel: {lvl} ({tag})", ha='center', fontsize=11)
+            ax3.text(.08,.88,"Descripción", fontsize=13, fontweight='bold'); ax3.text(.08,.85, DIMENSIONES[d]["desc"], fontsize=11)
+            ax3.text(.08,.81,"Explicativo del KPI", fontsize=13, fontweight='bold'); ax3.text(.08,.78, expl, fontsize=11)
 
-            fig3 = plt.figure(figsize=(8.27, 11.69))
-            ax3 = fig3.add_axes([0,0,1,1]); ax3.axis("off")
-            ax3.text(.5,.95, f"{DIMENSIONES[d]['code']} — {d}", ha="center", fontsize=18, fontweight="bold")
-            ax3.text(.5,.92, f"Puntuación {score:.1f} · {lvl} ({tag})", ha="center", fontsize=11)
+            def draw_list(y, title, items):
+                ax3.text(.08,y,title, fontsize=13, fontweight='bold')
+                yy = y - .03
+                for it in items:
+                    ax3.text(.10, yy, f"• {it}", fontsize=11)
+                    yy -= .03
+                return yy -.02
 
-            # Medidor semicircular
-            axg = fig3.add_axes([.18, .78, .64, .16]); axg.axis("off")
-            semicircle(axg, score, cx=0.5, cy=0.0, r=0.9)
-
-            def block(ax, y, title, items=None, text=None):
-                ax.text(.06, y, title, fontsize=13, fontweight="bold"); y-=.03
-                if text:
-                    ax.text(.06, y, text, fontsize=11); y-=.035
-                if items:
-                    for it in items:
-                        ax.text(.06, y, f"• {it}", fontsize=11); y-=.026
-                return y-.005
-
-            yb = .74
-            yb = block(ax3, yb, "Descripción", text=DIMENSIONES[d]["desc"])
-            yb = block(ax3, yb, "Explicativo del KPI", text=expl)
-            yb = block(ax3, yb, "Fortalezas (laborales)", items=fort)
-            yb = block(ax3, yb, "Riesgos / Cosas a cuidar", items=risk)
-            yb = block(ax3, yb, "Recomendaciones", items=recs)
-            yb = block(ax3, yb, "Roles sugeridos", items=roles)
-            yb = block(ax3, yb, "No recomendado para", items=(notapt if notapt else ["—"]))
-
-            pdf.savefig(fig3, bbox_inches="tight"); plt.close(fig3)
+            yy = .74
+            yy = draw_list(yy, "Fortalezas (laborales)", f)
+            yy = draw_list(yy, "Riesgos / Cosas a cuidar", r)
+            yy = draw_list(yy, "Recomendaciones", recs)
+            yy = draw_list(yy, "Roles sugeridos", roles)
+            draw_list(yy, "No recomendado para", not_apt if not_apt else ["—"])
+            pdf.savefig(fig3, bbox_inches='tight'); plt.close(fig3)
 
     buf.seek(0)
     return buf.read()
 
-# ========= BLOQUES LABORALES (fortalezas, riesgos...) =========
-def build_dimension_blocks(dim: str, score: float):
-    lvl, tag = level_label(score)
-    # Catálogo base por dimensión (puedes afinar los textos a tu gusto)
-    base = {
-        "Apertura a la Experiencia": dict(
-            high=[
-                "Genera ideas originales y mejora procesos.",
-                "Aprende rápido y se adapta a cambios.",
-                "Explora alternativas antes de decidir.",
-            ],
-            low=[
-                "Puede apegarse demasiado a lo conocido.",
-                "Menor interés por explorar enfoques nuevos.",
-                "Riesgo de estancamiento en contextos dinámicos.",
-            ],
-            roles_high=["I+D", "Innovación", "Estrategia", "Consultoría", "Producto"],
-            roles_low=["Operaciones tradicionales", "Roles de cumplimiento estricto"],
-            not_apt_low=["Puestos que exigen alta creatividad disruptiva"],
-            explain="Indica preferencia por lo nuevo versus lo convencional; útil para innovación o mantenimiento de procesos."
-        ),
-        "Responsabilidad": dict(
-            high=[
-                "Fiable, orientado a la ejecución y al detalle.",
-                "Planificación consistente y disciplina.",
-                "Excelente seguimiento de plazos y estándares.",
-            ],
-            low=[
-                "Riesgo de procrastinar o perder foco.",
-                "Necesita supervisión externa y recordatorios.",
-                "Dificultad para sostener rutinas de control.",
-            ],
-            roles_high=["Gestión de Proyectos", "Calidad", "Finanzas", "PMO"],
-            roles_low=["Creativos sin estructura", "Entornos caóticos"],
-            not_apt_low=["Puestos críticos de control normativo sin apoyo"],
-            explain="Refleja orden, disciplina y confiabilidad; clave para roles con procesos y estándares."
-        ),
-        "Extraversión": dict(
-            high=[
-                "Capacidad para influir y hacer networking.",
-                "Energía en contextos colaborativos.",
-                "Comunicación fluida con clientes y equipos.",
-            ],
-            low=[
-                "Prefiere trabajo individual y concentrado.",
-                "Menor espontaneidad en grandes grupos.",
-                "Riesgo de sub-exposición en espacios políticos.",
-            ],
-            roles_high=["Ventas", "Relaciones Públicas", "Liderazgo de Equipos"],
-            roles_low=["Análisis profundo individual", "I+D técnico aislado"],
-            not_apt_low=["Roles de alta exposición pública permanente"],
-            explain="Mide energía social y asertividad; útil para relación con clientes o coordinación ampliada."
-        ),
-        "Amabilidad": dict(
-            high=[
-                "Facilita la colaboración y la confianza.",
-                "Capacidad de escucha y negociación.",
-                "Gestiona conflictos con tacto.",
-            ],
-            low=[
-                "Comunicación más directa y competitiva.",
-                "Riesgo de fricción en equipos sensibles.",
-                "Puede priorizar resultados sobre relaciones.",
-            ],
-            roles_high=["RR. HH.", "Servicio al Cliente", "Mediación", "Cultura"],
-            roles_low=["Negociación dura", "Ambientes altamente competitivos"],
-            not_apt_low=["Puestos que requieren fuerte diplomacia con alta sensibilidad social"],
-            explain="Describe cooperación y empatía vs. franqueza competitiva; ajusta el estilo de influencia."
-        ),
-        "Estabilidad Emocional": dict(
-            high=[
-                "Mantiene la calma bajo presión.",
-                "Toma decisiones serenas en crisis.",
-                "Alta resiliencia ante contratiempos.",
-            ],
-            low=[
-                "Vulnerable al estrés y a la reactividad.",
-                "Necesita contención en picos de demanda.",
-                "Riesgo de desgaste en plazos críticos.",
-            ],
-            roles_high=["Gestión de Crisis", "Operaciones de Alto Estrés", "Dirección"],
-            roles_low=["Ambientes impredecibles sin soporte"],
-            not_apt_low=["Puestos con exposición constante a conflicto o crisis severa"],
-            explain="Evalúa manejo del estrés y regulación emocional; esencial para entornos demandantes."
-        ),
-    }
-    b = base[dim]
-    if score >= 60:
-        fort = b["high"]
-        risk = b["low"][:1] + ["Evitar la sobrecarga por asumir demasiadas interacciones." if dim=="Extraversión" else
-                               "Evitar sobrerresponsabilizarse y no delegar."]  # matiz
-        recs = [
-            "Definir objetivos medibles y celebrar hitos.",
-            "Compartir buenas prácticas con el equipo.",
-            "Equilibrar producción con espacios de recuperación.",
-        ]
-        roles = b["roles_high"]
-        not_apt = []
-    elif score <= 40:
-        fort = ["Potencial de foco profundo y consistencia cuando hay estructura."] if dim!="Extraversión" else \
-               ["Mayor autonomía en tareas individuales de alta concentración."]
-        fort += ["Aporta mirada realista y práctica."] if dim=="Apertura a la Experiencia" else []
-        risk = b["low"]
-        recs = [
-            "Establecer rutinas y checklists.",
-            "Uso de recordatorios y gestión visual del trabajo.",
-            "Mentoría o pairing para sostener hábitos clave.",
-        ]
-        roles = b["roles_low"]
-        not_apt = b["not_apt_low"]
-    else:
-        fort = ["Perfil balanceado; adapta su estilo al contexto."]
-        risk = ["Atender picos de demanda con planificación anticipada."]
-        recs = ["Clarificar expectativas y límites por proyecto.",
-                "Solicitar feedback regular de pares y clientes."]
-        roles = ["Roles mixtos (individual y colaborativo)", "Proyectos con interacción moderada"]
-        not_apt = []
-    explain = b["explain"]
-    return fort, risk, recs, roles, not_apt, explain
+def build_html(res:dict, fecha:str)->bytes:
+    order = list(res.keys()); vals=[res[d] for d in order]
+    avg=np.mean(vals); std=np.std(vals, ddof=1) if len(vals)>1 else 0.0; rng=np.max(vals)-np.min(vals); top=max(res,key=res.get)
+    rows = ""
+    for d in order:
+        lvl,tag = level_label(res[d])
+        rows += f"<tr><td>{DIMENSIONES[d]['code']}</td><td>{d}</td><td>{res[d]:.1f}</td><td>{lvl}</td><td>{tag}</td></tr>"
+    blocks=""
+    for d in order:
+        score=res[d]; lvl,tag = level_label(score)
+        f,r,recs,roles,not_apt, expl = dimension_profile(d, score)
+        blocks += f"""
+<section style="border:1px solid #eee; border-radius:12px; padding:14px; margin:14px 0;">
+  <h3 style="margin:.2rem 0;">{DIMENSIONES[d]['code']} — {d} <span class='tag'>{score:.1f} · {lvl} ({tag})</span></h3>
+  <p style="margin:.25rem 0; color:#333;">{DIMENSIONES[d]["desc"]}</p>
+  <h4>Explicativo del KPI</h4>
+  <p>{expl}</p>
+  <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap:12px;">
+    <div><h4>Fortalezas</h4><ul>{''.join([f'<li>{x}</li>' for x in f])}</ul></div>
+    <div><h4>Riesgos</h4><ul>{''.join([f'<li>{x}</li>' for x in r])}</ul></div>
+    <div><h4>Recomendaciones</h4><ul>{''.join([f'<li>{x}</li>' for x in recs])}</ul></div>
+  </div>
+  <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap:12px; margin-top:10px;">
+    <div><h4>Roles sugeridos</h4><ul>{''.join([f'<li>{x}</li>' for x in roles])}</ul></div>
+    <div><h4>No recomendado para</h4><ul>{''.join([f'<li>{x}</li>' for x in (not_apt if not_apt else ['—'])])}</ul></div>
+  </div>
+</section>
+"""
+    html=f"""<!doctype html>
+<html><head><meta charset="utf-8" />
+<title>Informe Big Five Laboral</title>
+<style>
+body{{font-family:Inter,Arial; margin:24px; color:#111;}}
+h1{{font-size:24px; margin:0 0 8px 0;}}
+h3{{font-size:18px; margin:.2rem 0;}}
+h4{{font-size:15px; margin:.2rem 0;}}
+table{{border-collapse:collapse; width:100%; margin-top:8px}}
+th,td{{border:1px solid #eee; padding:8px; text-align:left;}}
+.tag{{display:inline-block; padding:.2rem .6rem; border:1px solid #eee; border-radius:999px; font-size:.82rem;}}
+.kpi-grid{{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin:10px 0 6px 0;}}
+.kpi{{border:1px solid #eee; border-radius:12px; padding:12px; background:#fff;}}
+.kpi .label{{font-size:13px; opacity:.85}}
+.kpi .value{{font-size:22px; font-weight:800}}
+@media print{{ .no-print{{display:none}} }}
+</style>
+</head>
+<body>
+<h1>Informe Big Five — Contexto Laboral</h1>
+<p>Fecha: <b>{fecha}</b></p>
+<div class="kpi-grid">
+  <div class="kpi"><div class="label">Promedio general (0–100)</div><div class="value">{avg:.1f}</div></div>
+  <div class="kpi"><div class="label">Desviación estándar</div><div class="value">{std:.2f}</div></div>
+  <div class="kpi"><div class="label">Rango</div><div class="value">{rng:.2f}</div></div>
+  <div class="kpi"><div class="label">Dimensión destacada</div><div class="value">{top}</div></div>
+</div>
 
-# ========= CALLBACK (auto-avance) =========
-def on_select():
-    # Guardamos la respuesta actual y avanzamos
-    idx = st.session_state.q_index
-    if 0 <= idx < len(PREGUNTAS):
-        q = PREGUNTAS[idx]
-        sel = st.session_state.get(f"sel_{q['key']}")
-        if sel is not None:
-            st.session_state.answers[q["key"]] = sel
-            st.session_state.q_index = idx + 1
-            if st.session_state.q_index >= len(PREGUNTAS):
-                st.session_state.result = compute_scores(st.session_state.answers)
-                st.session_state.fecha = datetime.now().strftime("%d/%m/%Y %H:%M")
-                st.session_state.stage = "resultados"
+<h3>Tabla resumen</h3>
+<table>
+  <thead><tr><th>Código</th><th>Dimensión</th><th>Puntuación</th><th>Nivel</th><th>Etiqueta</th></tr></thead>
+  <tbody>{rows}</tbody>
+</table>
 
-# ========= VISTAS =========
+<h3>Análisis por dimensión (laboral)</h3>
+{blocks}
+
+<div class="no-print" style="margin-top:16px;">
+  <button onclick="window.print()" style="padding:10px 14px; border:1px solid #ddd; background:#f9f9f9; border-radius:8px; cursor:pointer;">
+    Imprimir / Guardar como PDF
+  </button>
+</div>
+</body></html>"""
+    return html.encode("utf-8")
+
+# ---------------------------------------------------------------
+# Vistas
+# ---------------------------------------------------------------
 def view_inicio():
-    st.markdown('<div class="soft-card">', unsafe_allow_html=True)
-    st.markdown('<div class="big-title">🧠 Test de Personalidad Big Five (OCEAN)</div>', unsafe_allow_html=True)
-    st.caption("Evaluación profesional para contextos laborales (RR. HH., selección, desarrollo).")
-    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-
-    c1, c2, c3 = st.columns([1.2,1,1])
-    with c1:
-        st.markdown("**Cómo funciona**")
-        st.markdown("- 50 ítems (10 por dimensión), escala Likert 1 a 5.")
-        st.markdown("- **Auto-avance:** al responder, pasa a la siguiente pregunta.")
-        st.markdown("- Resultados: **KPIs**, medidores, radar, barras, comparativo y **análisis laboral**.")
-    with c2:
-        st.markdown("**Dimensiones**")
-        for d in DIM_LIST:
-            st.markdown(f"- **{DIMENSIONES[d]['code']}** · {d}")
-    with c3:
-        st.markdown("**Tiempo estimado**")
-        st.markdown("- 8–12 minutos")
-        st.markdown("- Puedes salir y volver; guardamos tu progreso en esta sesión.")
-
-    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-    _, m, _ = st.columns([1,1,1])
-    with m:
-        if st.button("Iniciar evaluación", type="primary", use_container_width=True):
-            st.session_state.stage = "test"
-            st.session_state.q_index = 0
-    st.markdown('</div>', unsafe_allow_html=True)
-
-def view_test():
-    idx = st.session_state.q_index
-    if idx >= len(PREGUNTAS):
-        # Cierre automático (por si el usuario recarga en la última)
-        st.session_state.result = compute_scores(st.session_state.answers)
-        st.session_state.fecha = datetime.now().strftime("%d/%m/%Y %H:%M")
-        st.session_state.stage = "resultados"
-        st.rerun()
-
-    q = PREGUNTAS[idx]
-    dim = q["dim"]
-    code = DIMENSIONES[dim]["code"]
-    color = DIMENSIONES[dim]["color"]
-
-    # Cabecera grande
     st.markdown(
-        f"""
-        <div class="soft-card">
-            <div style="font-size:2.2rem;font-weight:900;margin-bottom:2px;">{code} · {dim}</div>
-            <div class="dim-badge">{DIMENSIONES[dim]['desc']}</div>
+        """
+        <div class="card">
+          <h1 style="margin:0 0 6px 0; font-size:clamp(2.2rem,3.8vw,3rem); font-weight:900;">
+            🧠 Test Big Five (OCEAN) — Evaluación Laboral
+          </h1>
+          <p class="tag" style="margin:0;">Fondo blanco · Texto negro · Diseño profesional y responsivo</p>
         </div>
         """, unsafe_allow_html=True
     )
-    st.markdown("")
+    c1, c2 = st.columns([1.35,1])
+    with c1:
+        st.markdown(
+            """
+            <div class="card">
+              <h3 style="margin-top:0">¿Qué mide?</h3>
+              <ul style="line-height:1.6">
+                <li><b>O</b> Apertura a la Experiencia</li>
+                <li><b>C</b> Responsabilidad</li>
+                <li><b>E</b> Extraversión</li>
+                <li><b>A</b> Amabilidad</li>
+                <li><b>N</b> Estabilidad Emocional</li>
+              </ul>
+              <p class="small">50 ítems Likert (1–5) · Autoavance · Duración estimada: <b>8–12 min</b>.</p>
+            </div>
+            """, unsafe_allow_html=True
+        )
+    with c2:
+        st.markdown(
+            """
+            <div class="card">
+              <h3 style="margin-top:0">Cómo funciona</h3>
+              <ol style="line-height:1.6">
+                <li>Ves 1 pregunta por pantalla y eliges una opción.</li>
+                <li>Al elegir, avanzas automáticamente a la siguiente.</li>
+                <li>Resultados con KPIs, gráficos y análisis laboral (pros, riesgos, recomendaciones, <i>roles sugeridos</i> y <i>no recomendado para</i>).</li>
+              </ol>
+            </div>
+            """, unsafe_allow_html=True
+        )
+        if st.button("🚀 Iniciar evaluación", type="primary", use_container_width=True):
+            st.session_state.stage = "test"
+            st.session_state.q_idx = 0
+            st.session_state.answers = {q["key"]:None for q in QUESTIONS}
+            st.session_state.fecha = None
+            st.rerun()
 
-    # Progreso
-    prog = (idx)/len(PREGUNTAS)
-    st.progress(prog, text=f"Progreso: {idx}/{len(PREGUNTAS)}")
-
-    # Tarjeta de pregunta
-    st.markdown('<div class="soft-card">', unsafe_allow_html=True)
-    st.markdown(f'<div class="question">{q["text"]}</div>', unsafe_allow_html=True)
-
-    # Radio con callback de auto-advance
+def view_test():
+    i = st.session_state.q_idx
+    q = QUESTIONS[i]
+    dim = q["dim"]; code = DIMENSIONES[dim]["code"]; icon = DIMENSIONES[dim]["icon"]
+    p = (i+1)/len(QUESTIONS)
+    st.progress(p, text=f"Progreso: {i+1}/{len(QUESTIONS)}")
+    st.markdown(f"<div class='dim-title'>{icon} {code} — {dim}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='dim-desc'>{DIMENSIONES[dim]['desc']}</div>", unsafe_allow_html=True)
+    st.markdown("---")
+    st.markdown("<div class='card'>", unsafe_allow_html=True)
+    st.markdown(f"### {i+1}. {q['text']}")
+    prev = st.session_state.answers.get(q["key"])
+    prev_idx = None if prev is None else LIK_KEYS.index(prev)
     st.radio(
-        label="",
-        options=LIKERT,
-        format_func=lambda x: ESCALA_LIKERT[x],
-        key=f"sel_{q['key']}",
+        "Selecciona una opción",
+        options=LIK_KEYS,
+        index=prev_idx,
+        format_func=lambda x: LIKERT[x],
+        key=f"resp_{q['key']}",
         horizontal=True,
-        on_change=on_select,
+        label_visibility="collapsed",
+        on_change=on_answer_change,
+        args=(q["key"],),
     )
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    st.caption("Selecciona una alternativa para continuar automáticamente.")
+    st.markdown("</div>", unsafe_allow_html=True)
 
 def view_resultados():
-    res = st.session_state.result
-    if not res:
-        st.session_state.stage = "inicio"
-        st.rerun()
+    res = compute_scores(st.session_state.answers)
+    order = list(res.keys()); vals=[res[d] for d in order]
+    avg = round(float(np.mean(vals)),1)
+    std = round(float(np.std(vals, ddof=1)),2) if len(vals)>1 else 0.0
+    rng = round(float(np.max(vals)-np.min(vals)),2)
+    top = max(res, key=res.get)
 
-    # KPIs superiores
-    vals = np.array([res[d] for d in DIM_LIST], dtype=float)
-    avg = float(np.mean(vals))
-    std = float(np.std(vals, ddof=1)) if len(vals) > 1 else 0.0
-    rng = float(np.max(vals) - np.min(vals)) if len(vals) > 1 else 0.0
-    best = max(res, key=res.get)
-    worst = min(res, key=res.get)
+    # Encabezado
+    st.markdown(
+        f"""
+        <div class="card">
+          <h1 style="margin:0 0 6px 0; font-size:clamp(2.2rem,3.8vw,3rem); font-weight:900;">📊 Informe Big Five — Resultados Laborales</h1>
+          <p class="small" style="margin:0;">Fecha: <b>{st.session_state.fecha}</b></p>
+        </div>
+        """, unsafe_allow_html=True
+    )
 
-    st.markdown('<div class="big-title">📊 Resultados · Informe Profesional</div>', unsafe_allow_html=True)
-    st.caption(f"Fecha de evaluación: {st.session_state.fecha}")
-    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+    # KPIs
+    st.markdown("<div class='kpi-grid'>", unsafe_allow_html=True)
+    st.markdown(f"<div class='kpi'><div class='label'>Promedio general (0–100)</div><div class='value countup' data-target='{avg:.1f}'>{avg:.1f}</div></div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='kpi'><div class='label'>Desviación estándar</div><div class='value countup' data-target='{std:.2f}'>{std:.2f}</div></div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='kpi'><div class='label'>Rango</div><div class='value countup' data-target='{rng:.2f}'>{rng:.2f}</div></div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='kpi'><div class='label'>Dimensión destacada</div><div class='value'>{top}</div></div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    k1, k2, k3, k4 = st.columns(4)
-    with k1: st.markdown('<div class="kpi-card"><div class="section-title">Promedio</div><div style="font-size:1.8rem;font-weight:800;">{:.1f}</div><div class="subtle">0–100</div></div>'.format(avg), unsafe_allow_html=True)
-    with k2: st.markdown('<div class="kpi-card"><div class="section-title">Desviación Est.</div><div style="font-size:1.8rem;font-weight:800;">{:.2f}</div><div class="subtle">Variabilidad entre rasgos</div></div>'.format(std), unsafe_allow_html=True)
-    with k3: st.markdown('<div class="kpi-card"><div class="section-title">Rango</div><div style="font-size:1.8rem;font-weight:800;">{:.2f}</div><div class="subtle">Máx - Mín</div></div>'.format(rng), unsafe_allow_html=True)
-    with k4: st.markdown(f'<div class="kpi-card"><div class="section-title">Destacado</div><div style="font-size:1.1rem;font-weight:800;">{best}</div><div class="subtle">{res[best]:.1f} pts</div></div>', unsafe_allow_html=True)
+    st.markdown("---")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.subheader("🎯 Radar del perfil")
+        st.plotly_chart(plot_radar(res), use_container_width=True)
+    with c2:
+        st.subheader("📊 Puntuaciones por dimensión")
+        fig_bar, df_sorted = plot_bar(res)
+        st.plotly_chart(fig_bar, use_container_width=True)
 
-    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+    st.markdown("---")
+    st.subheader("📋 Resumen de resultados")
+    tabla = pd.DataFrame({
+        "Código":[DIMENSIONES[d]["code"] for d in order],
+        "Dimensión":order,
+        "Puntuación":[f"{res[d]:.1f}" for d in order],
+        "Nivel":[level_label(res[d])[0] for d in order],
+        "Etiqueta":[level_label(res[d])[1] for d in order],
+    })
+    st.dataframe(tabla, use_container_width=True, hide_index=True)
 
-    # Visualizaciones generales
-    t1, t2, t3 = st.tabs(["🎯 Radar", "📊 Barras", "⚖️ Comparativo"])
-    with t1:
-        fig_radar = go.Figure()
-        fig_radar.add_trace(go.Scatterpolar(
-            r=[res[d] for d in DIM_LIST],
-            theta=[f"{DIMENSIONES[d]['code']} – {d}" for d in DIM_LIST],
-            fill="toself",
-            name="Perfil",
-            line=dict(width=3, color="#6D597A"),
-            fillcolor="rgba(109, 89, 122, .15)",
-            marker=dict(size=6)
-        ))
-        fig_radar.update_layout(
-            polar=dict(radialaxis=dict(visible=True, range=[0,100])),
-            showlegend=False,
-            height=480,
-            template="plotly_white"
-        )
-        st.plotly_chart(fig_radar, use_container_width=True)
+    # ---------- NUEVO: Análisis por dimensión con colores y estructura ----------
+    st.markdown("---")
+    st.subheader("🔍 Análisis por dimensión (laboral)")
 
-    with t2:
-        df = pd.DataFrame({"Dimensión": DIM_LIST, "Puntuación": [res[d] for d in DIM_LIST]})
-        df = df.sort_values("Puntuación", ascending=True)
-        bar = go.Figure(go.Bar(
-            x=df["Puntuación"], y=df["Dimensión"], orientation="h",
-            text=df["Puntuación"].round(1), textposition="outside",
-            marker=dict(color="#81B29A")
-        ))
-        bar.update_layout(height=480, xaxis=dict(range=[0,100]), template="plotly_white")
-        st.plotly_chart(bar, use_container_width=True)
-
-    with t3:
-        comp = go.Figure()
-        comp.add_trace(go.Bar(x=DIM_LIST, y=[res[d] for d in DIM_LIST], name="Perfil", marker=dict(color="#6D597A")))
-        comp.add_trace(go.Bar(x=DIM_LIST, y=[50]*len(DIM_LIST), name="Promedio Poblacional", marker=dict(color="#D9D9D9")))
-        comp.update_layout(barmode="group", height=480, yaxis=dict(range=[0,100]), template="plotly_white", showlegend=True)
-        st.plotly_chart(comp, use_container_width=True)
-
-    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-
-    # Análisis por dimensión (laboral) – con medidor semicircular plotly
-    st.markdown('<div class="big-title">🔎 Análisis por dimensión (laboral)</div>', unsafe_allow_html=True)
-    st.caption("Fortalezas, riesgos, recomendaciones y ajuste a roles.")
-    st.markdown("")
+    pastel_class = {
+        "Apertura a la Experiencia":"pastel-O",
+        "Responsabilidad":"pastel-C",
+        "Extraversión":"pastel-E",
+        "Amabilidad":"pastel-A",
+        "Estabilidad Emocional":"pastel-N",
+    }
 
     for d in DIM_LIST:
-        score = res[d]
-        lvl, tag = level_label(score)
+        score = res[d]; lvl, tag = level_label(score)
+        f, r, recs, roles, not_apt, expl = dimension_profile(d, score)
+        icon = DIMENSIONES[d]["icon"]; code = DIMENSIONES[d]["code"]
         with st.container():
-            st.markdown('<div class="soft-card">', unsafe_allow_html=True)
-            st.markdown(f"### {DIMENSIONES[d]['code']} · {d}")
-            st.plotly_chart(semi_gauge_plotly(score, title=f"{lvl} · {tag}"), use_container_width=True)
+            st.markdown(f"""
+            <div class="dim-card">
+              <div class="dim-card-header {pastel_class[d]}">
+                <div class="dim-chip">{icon} {code}</div>
+                <div class="dim-title-row" style="flex:1;">
+                  <h3 class="dim-title-name" style="margin:0;">{d}</h3>
+                  <div class="badge">{score:.1f} · {lvl} · {tag}</div>
+                </div>
+              </div>
+              <div class="dim-body">
+                <div class="dim-grid">
+                  <div class="dim-section">
+                    <h4>Descripción</h4>
+                    <p class="small">{DIMENSIONES[d]["desc"]}</p>
+                    <h4>Explicativo del KPI</h4>
+                    <p class="small">{expl}</p>
+                  </div>
 
-            fort, risk, recs, roles, notapt, expl = build_dimension_blocks(d, score)
+                  <div class="dim-section">
+                    <h4>Fortalezas (laborales)</h4>
+                    <ul class="dim-list">
+                      {''.join([f"<li>✅ {x}</li>" for x in f])}
+                    </ul>
+                  </div>
 
-            cA, cB = st.columns([1.1,1])
-            with cA:
-                st.markdown("**Descripción**")
-                st.write(DIMENSIONES[d]["desc"])
-                st.markdown("**Explicativo del KPI**")
-                st.write(expl)
+                  <div class="dim-section">
+                    <h4>Riesgos / Cosas a cuidar</h4>
+                    <ul class="dim-list">
+                      {''.join([f"<li>⚠️ {x}</li>" for x in r])}
+                    </ul>
+                  </div>
 
-            with cB:
-                st.markdown("**Indicadores**")
-                st.write(f"- **Puntuación**: {score:.1f} (0–100)")
-                st.write(f"- **Nivel**: {lvl} · **Etiqueta**: {tag}")
+                  <div class="dim-section">
+                    <h4>Recomendaciones</h4>
+                    <ul class="dim-list">
+                      {''.join([f"<li>🛠️ {x}</li>" for x in recs])}
+                    </ul>
+                  </div>
 
-            st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+                  <div class="dim-section">
+                    <h4>Roles sugeridos</h4>
+                    <ul class="dim-list">
+                      {''.join([f"<li>🎯 {x}</li>" for x in roles])}
+                    </ul>
+                  </div>
 
-            c1, c2 = st.columns(2)
-            with c1:
-                st.markdown("#### ✅ Fortalezas (laborales)")
-                for f in fort: st.markdown(f"- {f}")
-                st.markdown("#### 🧭 Recomendaciones")
-                for r in recs: st.markdown(f"- {r}")
-            with c2:
-                st.markdown("#### ⚠️ Riesgos / Cosas a cuidar")
-                for r in risk: st.markdown(f"- {r}")
-                st.markdown("#### 🎯 Roles sugeridos")
-                for r in roles: st.markdown(f"- {r}")
+                  <div class="dim-section">
+                    <h4>No recomendado para</h4>
+                    <ul class="dim-list">
+                      {''.join([f"<li>⛔ {x}</li>" for x in (not_apt if not_apt else ["—"])])}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
 
-            st.markdown("#### ⛔ No recomendado para")
-            if notapt:
-                for r in notapt: st.markdown(f"- {r}")
-            else:
-                st.markdown("- —")
+    st.markdown("---")
+    st.subheader("📥 Exportar informe")
 
-            st.markdown('</div>', unsafe_allow_html=True)
-            st.markdown("")
+    if HAS_MPL:
+        pdf_bytes = build_pdf(res, st.session_state.fecha)
+        st.download_button(
+            "⬇️ Descargar PDF (servidor)",
+            data=pdf_bytes,
+            file_name="Informe_BigFive_Laboral.pdf",
+            mime="application/pdf",
+            use_container_width=True
+        )
+    else:
+        html_bytes = build_html(res, st.session_state.fecha)
+        st.download_button(
+            "⬇️ Descargar Reporte (HTML) — Imprime como PDF",
+            data=html_bytes,
+            file_name="Informe_BigFive_Laboral.html",
+            mime="text/html",
+            use_container_width=True
+        )
+        st.caption("Abre el HTML y usa “Imprimir → Guardar como PDF”. (Si instalas matplotlib obtendrás PDF directo.)")
 
-    # Descarga de PDF
-    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-    cdl, cr = st.columns([1,1])
-    with cdl:
-        try:
-            pdf_bytes = build_pdf(res, st.session_state.fecha)
-            st.download_button(
-                "⬇️ Descargar informe en PDF",
-                data=pdf_bytes,
-                file_name="Informe_BigFive_Laboral.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-                type="primary"
-            )
-        except Exception as e:
-            st.error("No se pudo generar el PDF en este entorno.")
-            st.caption(str(e))
-    with cr:
-        if st.button("🔄 Realizar nueva evaluación", use_container_width=True):
-            st.session_state.stage = "inicio"
-            st.session_state.q_index = 0
-            st.session_state.answers = {p["key"]: None for p in PREGUNTAS}
-            st.session_state.result = None
+    st.markdown("---")
+    if st.button("🔄 Nueva evaluación", type="primary", use_container_width=True):
+        st.session_state.stage = "inicio"
+        st.session_state.q_idx = 0
+        st.session_state.answers = {q["key"]:None for q in QUESTIONS}
+        st.session_state.fecha = None
+        st.rerun()
 
-# ========= ROUTER =========
+# ---------------------------------------------------------------
+# FLUJO PRINCIPAL
+# ---------------------------------------------------------------
 if st.session_state.stage == "inicio":
     view_inicio()
 elif st.session_state.stage == "test":
     view_test()
-elif st.session_state.stage == "resultados":
-    view_resultados()
 else:
-    st.session_state.stage = "inicio"
+    view_resultados()
+
+# Rerun único si el callback de la radio lo marcó
+if st.session_state._needs_rerun:
+    st.session_state._needs_rerun = False
     st.rerun()
