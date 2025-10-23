@@ -501,37 +501,56 @@ def vista_test_activo():
 
 def vista_resultados():
     """Vista de resultados profesional."""
-    forzar_scroll_al_top()
-    
+    # 👇 NO llames forzar_scroll_al_top aquí arriba: espera a renderizar contenido
     resultados = st.session_state.resultados
-    
+
     if resultados is None:
         st.warning("No hay resultados disponibles.")
         if st.button("Volver al Inicio"):
             reiniciar_test()
             st.rerun()
         return
-    
+
     st.title("📊 Tu Informe de Personalidad Big Five")
     st.markdown(f"**Fecha de Evaluación:** {st.session_state.fecha_evaluacion}")
     st.markdown("---")
-      forzar_scroll_al_top()
-    
-    # --- 1. RESUMEN EJECUTIVO ---
-    st.header("1. 📈 Resumen Ejecutivo")
-    
-    promedio_total = np.mean(list(resultados.values()))
-    
-    st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #0077b6 0%, #00b4d8 100%); 
-                padding: 30px; border-radius: 15px; color: white; text-align: center;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.2); margin-bottom: 30px;">
-        <h2 style="margin: 0; font-size: 2.5em;">Puntuación Promedio: {promedio_total:.1f}/100</h2>
-        <p style="margin: 15px 0 0 0; font-size: 1.2em; opacity: 0.9;">
-            Perfil Equilibrado con Características Distintivas
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+
+    # ... (todo el contenido intermedio de la vista que ya tienes) ...
+    # tablas, gráficos, recomendaciones, etc.
+
+    st.markdown("---")
+
+    # --- 8. EXPORTAR Y ACCIONES ---
+    st.header("7. 📥 Exportar Resultados")
+
+    col_download, col_reiniciar = st.columns(2)
+
+    with col_download:
+        csv_data = df_resultados.to_csv(index=False)
+        st.download_button(
+            label="📊 Descargar Resultados (CSV)",
+            data=csv_data,
+            file_name=f"BigFive_Resultados_{st.session_state.fecha_evaluacion.replace('/', '-').replace(' ', '_').replace(':', '-')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+
+    with col_reiniciar:
+        if st.button("🔄 Realizar Nueva Evaluación", type="primary", use_container_width=True):
+            reiniciar_test()
+            st.rerun()
+
+    st.markdown("---")
+
+    st.info("""
+    **Disclaimer:** Los resultados de este test son orientativos y están basados en tus respuestas 
+    autorreportadas. La personalidad es compleja y multidimensional. Este test proporciona una 
+    aproximación general a tu perfil, pero no reemplaza una evaluación profesional completa.
+    """)
+
+    # ✅ Ahora sí: scroll al top al final de la vista (ya con todo renderizado)
+    forzar_scroll_al_top()
+
     
     # --- 2. VISUALIZACIONES ---
     st.header("2. 📊 Visualización de tu Perfil")
@@ -928,6 +947,7 @@ st.markdown("""
     © 2025 - Herramienta educativa y de orientación | No reemplaza evaluación profesional
 </p>
 """, unsafe_allow_html=True)
+
 
 
 
