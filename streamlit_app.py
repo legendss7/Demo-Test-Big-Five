@@ -4,7 +4,7 @@ import numpy as np
 import time
 import plotly.graph_objects as go
 import streamlit.components.v1 as components 
-import random # Necesario para las respuestas aleatorias
+import random 
 
 # --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
 st.set_page_config(layout="wide", page_title="Evaluación Big Five | Perfil Corporativo")
@@ -83,30 +83,34 @@ if 'resultados' not in st.session_state:
     st.session_state.resultados = None
 if 'current_dimension_index' not in st.session_state:
     st.session_state.current_dimension_index = 0
-if 'should_scroll' not in st.session_state:
-    st.session_state.should_scroll = False
+# Se usa 'scroll_key' para forzar una re-ejecución del script de scroll.
+if 'scroll_key' not in st.session_state:
+    st.session_state.scroll_key = 0
 
 # --- 2. FUNCIONES DE LÓGICA Y ANÁLISIS ---
 
 def forzar_scroll_al_top():
     """Función MAXIMAMENTE FORZADA para el scroll al top (usando lógica robusta)."""
-    js_code = """
+    # Se añade la clave para forzar la re-ejecución del componente en cada llamada.
+    st.session_state.scroll_key += 1 
+    
+    js_code = f"""
         <script>
-            setTimeout(function() {
+            setTimeout(function() {{
                 var topAnchor = window.parent.document.getElementById('top-anchor');
-                if (topAnchor) {
-                    topAnchor.scrollIntoView({ behavior: 'auto', block: 'start' });
-                } else {
-                    window.parent.scrollTo({ top: 0, behavior: 'auto' });
+                if (topAnchor) {{
+                    topAnchor.scrollIntoView({{ behavior: 'auto', block: 'start' }});
+                }} else {{
+                    window.parent.scrollTo({{ top: 0, behavior: 'auto' }});
                     var mainContent = window.parent.document.querySelector('[data-testid="stAppViewContainer"]');
-                    if (mainContent) {
-                        mainContent.scrollTo({ top: 0, behavior: 'auto' });
-                    }
-                }
-            }, 250); 
+                    if (mainContent) {{
+                        mainContent.scrollTo({{ top: 0, behavior: 'auto' }});
+                    }}
+                }}
+            }}, 250); 
         </script>
         """
-    st.components.v1.html(js_code, height=0, scrolling=False)
+    st.components.v1.html(js_code, height=0, scrolling=False, key=f"scroll_comp_{st.session_state.scroll_key}")
 
 def calcular_resultados(respuestas):
     """Calcula las puntuaciones promedio de las 5 dimensiones (Escala 0-100)."""
@@ -115,7 +119,6 @@ def calcular_resultados(respuestas):
     for p in PREGUNTAS:
         respuesta = respuestas.get(p['key'])
         
-        # Usamos 3 (Neutral) como fallback si no hay respuesta (aunque el flujo debe evitar esto)
         if respuesta is None: score = 3 
         elif p['reverse']: score = reverse_score(respuesta) 
         else: score = respuesta
@@ -125,7 +128,6 @@ def calcular_resultados(respuestas):
     resultados = {}
     for dim, score_list in scores.items():
         avg_score = np.mean(score_list)
-        # Normaliza el promedio (1-5) a una escala de 0-100
         percent_score = ((avg_score - 1) / 4) * 100
         resultados[dim] = round(percent_score)
         
@@ -140,17 +142,39 @@ def get_nivel_interpretacion(score):
     else: return "Muy Bajo", "#e76f51", "Recesivo"
 
 def get_recomendaciones(dim, score):
-    """Genera recomendaciones profesionales específicas por dimensión y nivel."""
+    """Genera recomendaciones profesionales específicas por dimensión y nivel, indicando aptitud."""
     nivel_map = get_nivel_interpretacion(score)[0]
     
+    # Hemos simplificado y aclarado la estructura de los mensajes de recomendación
     rec = {
-        "Apertura a la Experiencia (O)": {"Muy Alto": "Fomentar roles de **innovación, I+D y diseño estratégico**. Se adaptará bien a cambios y proyectos creativos. **Es idóneo** para Think Tanks.", "Bajo": "Ubicar en tareas con **procedimientos claros y poca ambigüedad**. Puede requerir entrenamiento para manejar el cambio o nuevas tecnologías. **No es idóneo** para roles de innovación disruptiva.", "Promedio": "Apto para roles que requieren un balance entre **estabilidad y creatividad**. Fomentar la participación en grupos de mejora continua."},
-        "Responsabilidad (C)": {"Muy Alto": "Asignar funciones de **auditoría, gestión de proyectos y roles críticos** donde la precisión es vital. Excelente autogestión. **Es idóneo** para Gerencia de Proyectos.", "Bajo": "Evitar roles que demanden alta autonomía en la planificación. Necesita **seguimiento estructurado y objetivos a corto plazo**. **No es idóneo** para Contraloría/Auditoría.", "Promedio": "Capaz de mantener la **disciplina en roles definidos**. Potenciar con herramientas de planificación y gestión del tiempo."},
-        "Extraversión (E)": {"Muy Alto": "Ideal para **ventas, liderazgo de equipos y networking corporativo**. Prospera en ambientes sociales y le gusta influir. **Es idóneo** para Dirección Comercial.", "Bajo": "Apto para roles de **análisis profundo, desarrollo individual y especialistas técnicos**. Requiere un ambiente de trabajo tranquilo y enfocado. **No es idóneo** para Representante de Marca (PR).", "Promedio": "Perfil **adaptable**; puede funcionar bien en equipos y en tareas solitarias. Entrenar en habilidades de presentación y comunicación."},
-        "Amabilidad (A)": {"Muy Alto": "Excelente para **recursos humanos, servicio al cliente y resolución de conflictos**. Promueve un clima laboral positivo. **Es idóneo** para Gerencia de RR.HH.", "Bajo": "Ubicar en posiciones que requieran **negociación dura o toma de decisiones complejas** sin sesgo emocional. Puede tener dificultades en la cohesión de equipos. **No es idóneo** para Soporte al Cliente.", "Promedio": "Buen colaborador. Fomentar el **liderazgo servicial y la mediación** en situaciones grupales."},
-        "Neuroticismo (N)": {"Muy Alto": "Requiere **soporte de bienestar emocional y un ambiente laboral de baja presión**. Evaluar el impacto del estrés en el rendimiento. **No es idóneo** para Operaciones de Crisis.", "Bajo": "Es un perfil **resiliente y estable**. Ideal para roles bajo presión constante (ej. operaciones críticas, manejo de crisis). **Es idóneo** para Gestión de Riesgos.", "Promedio": "Muestra **buena gestión emocional, pero puede fluctuar**. Ofrecer talleres de manejo de estrés preventivo."},
+        "Apertura a la Experiencia (O)": {
+            "Muy Alto": "**Idóneo** para Innovación, I+D y Diseño Estratégico. Se adaptará bien a cambios constantes.", 
+            "Bajo": "**No Idóneo** para roles de innovación disruptiva. Es apto para tareas con procedimientos claros y poca ambigüedad.", 
+            "Promedio": "Apto para roles que requieren un balance entre estabilidad y creatividad."
+        },
+        "Responsabilidad (C)": {
+            "Muy Alto": "**Idóneo** para Gerencia de Proyectos, Auditoría y roles críticos. Demuestra excelente autogestión.", 
+            "Bajo": "**No Idóneo** para Contraloría/Auditoría. Necesita seguimiento estructurado y objetivos a corto plazo.", 
+            "Promedio": "Capaz de mantener la disciplina en roles definidos."
+        },
+        "Extraversión (E)": {
+            "Muy Alto": "**Idóneo** para Dirección Comercial, Liderazgo de Equipos y Networking. Prospera en ambientes sociales.", 
+            "Bajo": "**No Idóneo** para Representante de Marca (PR) o Ventas de Campo. Es apto para roles de análisis profundo y especialistas técnicos.", 
+            "Promedio": "Perfil adaptable; buen desempeño en equipos y tareas solitarias."
+        },
+        "Amabilidad (A)": {
+            "Muy Alto": "**Idóneo** para Gerencia de RR.HH., Servicio al Cliente y Mediación. Promueve un clima laboral positivo.", 
+            "Bajo": "**No Idóneo** para Soporte al Cliente o RR.HH. Es apto para posiciones que requieran negociación dura sin sesgo emocional.", 
+            "Promedio": "Buen colaborador. Fomentar el liderazgo servicial."
+        },
+        "Neuroticismo (N)": {
+            "Muy Alto": "**No Idóneo** para Operaciones de Crisis o manejo de alto estrés. Requiere un ambiente laboral de baja presión.", 
+            "Bajo": "**Idóneo** para Gestión de Riesgos y Operaciones Críticas. Es un perfil resiliente y estable.", 
+            "Promedio": "Muestra buena gestión emocional, pero puede fluctuar."
+        },
     }
     
+    # Fallback al mensaje promedio si el nivel no está definido (aunque debería estar)
     return rec[dim].get(nivel_map, rec[dim].get("Promedio", "Desarrollar un plan de acción basado en las fortalezas y oportunidades en esta dimensión."))
 
 def get_roles_no_recomendados(resultados):
@@ -159,19 +183,20 @@ def get_roles_no_recomendados(resultados):
     UMBRAL_BAJO = 25
     UMBRAL_ALTO = 75
 
+    # Lógica que solo añade el cargo si la puntuación es extrema
     if resultados.get("Neuroticismo (N)", 0) > UMBRAL_ALTO:
-        no_aptos.add("Liderazgo de Crisis, Operaciones de Alto Riesgo, Soporte al Cliente (por inestabilidad).")
+        no_aptos.add("Liderazgo de Crisis (N>75)")
     if resultados.get("Responsabilidad (C)", 0) < UMBRAL_BAJO:
-        no_aptos.add("Gestión de Proyectos Críticos, Auditoría, Control de Calidad.")
+        no_aptos.add("Gestión de Proyectos Críticos (C<25)")
     if resultados.get("Amabilidad (A)", 0) < UMBRAL_BAJO:
-        no_aptos.add("Recursos Humanos, Mediación, Trabajo Social.")
+        no_aptos.add("Recursos Humanos y Soporte al Cliente (A<25)")
     if resultados.get("Apertura a la Experiencia (O)", 0) < UMBRAL_BAJO:
-        no_aptos.add("Investigación y Desarrollo (I+D), Innovación Tecnológica o funciones de alta ambigüedad.")
+        no_aptos.add("Investigación y Desarrollo (O<25)")
     if resultados.get("Extraversión (E)", 0) < UMBRAL_BAJO:
-        no_aptos.add("Ventas de Campo (cierre), Relaciones Públicas (RP) o Presentaciones ante grandes audiencias.")
+        no_aptos.add("Ventas y Relaciones Públicas (E<25)")
 
     if not no_aptos:
-        return "Ningún cargo crítico presenta incompatibilidad significativa."
+        return None # Retorna None si no hay incompatibilidades extremas.
     return " | ".join(sorted(list(no_aptos)))
 
 def crear_grafico_radar(resultados):
@@ -220,11 +245,9 @@ def crear_grafico_radar(resultados):
 
 def procesar_y_mostrar_resultados():
     """Calcula y avanza a la vista de resultados con animación."""
-    st.session_state.should_scroll = True
-    with st.spinner('Procesando datos y generando perfil de competencias...'):
-        time.sleep(3)
     st.session_state.resultados = calcular_resultados(st.session_state.respuestas)
     st.session_state.stage = 'resultados'
+    forzar_scroll_al_top()
     st.rerun()
 
 def iniciar_test():
@@ -233,23 +256,20 @@ def iniciar_test():
     st.session_state.current_dimension_index = 0
     st.session_state.respuestas = {p['key']: None for p in PREGUNTAS} 
     st.session_state.resultados = None
-    st.session_state.should_scroll = True # Forzar scroll al inicio del test
+    forzar_scroll_al_top()
     st.rerun()
 
 def completar_al_azar():
     """Genera respuestas aleatorias y avanza a resultados."""
-    # Genera respuestas válidas (1 a 5) para todas las preguntas
     respuestas_aleatorias = {p['key']: random.choice(LIKERT_OPTIONS) for p in PREGUNTAS}
     st.session_state.respuestas = respuestas_aleatorias
-    
-    # Simula el final del proceso
     procesar_y_mostrar_resultados()
     
 def avanzar_dimension():
     """Avanza al siguiente índice de dimensión o finaliza el test."""
     if st.session_state.current_dimension_index < len(DIMENSIONES_LIST) - 1:
         st.session_state.current_dimension_index += 1
-        st.session_state.should_scroll = True # Forzar scroll al inicio de la nueva dimensión
+        forzar_scroll_al_top()
         st.rerun()
     else:
         procesar_y_mostrar_resultados()
@@ -260,7 +280,7 @@ def reiniciar_test():
     st.session_state.current_dimension_index = 0
     st.session_state.respuestas = {p['key']: None for p in PREGUNTAS} 
     st.session_state.resultados = None
-    st.session_state.should_scroll = True
+    forzar_scroll_al_top()
     st.rerun()
 
 # --- 4. VISTAS DE LA APLICACIÓN ---
@@ -289,6 +309,9 @@ def vista_test_activo():
     current_index = st.session_state.current_dimension_index
     current_dim_name = DIMENSIONES_LIST[current_index]
     dim_info = DIMENSIONES[current_dim_name]
+    
+    # Se llama al scroll en el inicio de la vista activa para asegurar el efecto en cada rerun
+    forzar_scroll_al_top() 
     
     st.title(f"📝 Dimensión {current_index + 1} de {len(DIMENSIONES_LIST)}: {dim_info['icon']} {current_dim_name}")
     st.markdown(f"**Descripción:** {dim_info['desc']}")
@@ -321,12 +344,13 @@ def vista_test_activo():
                     initial_value = st.session_state.respuestas.get(p['key'])
                     initial_index = LIKERT_OPTIONS.index(initial_value) if initial_value is not None else None
                     
+                    # Se usa el key dinámico dentro del form para capturar el valor
                     respuestas_form[p['key']] = st.radio(
                         label=f"Respuesta para la pregunta {p['key']}",
                         options=LIKERT_OPTIONS,
                         format_func=lambda x: ESCALA_LIKERT[x],
                         index=initial_index,
-                        key=f"radio_{p['key']}",
+                        key=f"radio_{p['key']}_{current_index}", # Clave única por dimensión
                         horizontal=True,
                         label_visibility="collapsed"
                     )
@@ -421,17 +445,16 @@ def vista_resultados():
     
     roles_no_aptos = get_roles_no_recomendados(resultados)
     
-    if "Ningún cargo" in roles_no_aptos:
-        st.success(roles_no_aptos)
-        st.caption("Su perfil es versátil. No se identificaron incompatibilidades significativas para roles clave en base a los puntajes extremos.")
+    if roles_no_aptos is None:
+        st.success("Su perfil es **versátil**. No se identificaron incompatibilidades significativas para roles críticos en base a los puntajes extremos.")
     else:
         st.error(f"**Cargos NO Recomendados o de Alto Riesgo:** {roles_no_aptos}")
-        st.caption("Esta lista se basa en puntuaciones extremas (Muy Alto o Muy Bajo) que sugieren una incompatibilidad significativa con las demandas típicas de estos roles. Considere un plan de desarrollo para estas áreas.")
+        st.caption("Esta lista se basa en puntuaciones extremas (Muy Alto o Muy Bajo) que sugieren una incompatibilidad significativa con las demandas típicas de estos roles.")
         
     st.markdown("---")
 
     # --- 3. Plan de Desarrollo Individual y Cargos Idóneos ---
-    st.header("3. Plan de Desarrollo y Cargos Idóneos ✅")
+    st.header("3. Plan de Desarrollo Individual y Aptitud Profesional ✅")
     
     for dim in DIMENSIONES_LIST:
         score = resultados[dim]
@@ -446,7 +469,7 @@ def vista_resultados():
                 st.markdown(f"**Clasificación:** <span style='color:{color_hex}; font-weight: bold;'>{nivel} ({tag})</span>", unsafe_allow_html=True)
                 
             with col_rec:
-                st.subheader("Recomendación Profesional")
+                st.subheader("Conclusión de Aptitud")
                 rec = get_recomendaciones(dim, score)
                 st.success(rec)
             
@@ -463,10 +486,3 @@ elif st.session_state.stage == 'test_activo':
     vista_test_activo()
 elif st.session_state.stage == 'resultados':
     vista_resultados()
-
-# --- 6. EJECUCIÓN CONDICIONAL DEL SCROLL ---
-# Esto garantiza que el scroll se ejecute *después* de que Streamlit ha renderizado el nuevo contenido
-if st.session_state.should_scroll:
-    forzar_scroll_al_top()
-    # Desactiva la bandera después de ejecutar el scroll
-    st.session_state.should_scroll = False
