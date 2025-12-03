@@ -25,7 +25,7 @@ except Exception:
 # ---------------------------------------------------------------
 st.set_page_config(
     page_title="Big Five PRO | Evaluación Laboral",
-    page_icon="🧠",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -151,7 +151,7 @@ def reverse_score(v:int)->int: return 6 - v
 # Paleta por dimensión
 DIMENSIONES = {
     "Apertura a la Experiencia": {
-        "code":"O", "icon":"💡",
+        "code":"O", "icon":"",
         "desc":"Curiosidad intelectual, creatividad y apertura al cambio.",
         "color":"#8FB996",
         "fort_high":[
@@ -182,7 +182,7 @@ DIMENSIONES = {
         "no_apt_low":["Laboratorios de innovación, estrategia corporativa"]
     },
     "Responsabilidad": {
-        "code":"C", "icon":"🎯",
+        "code":"C", "icon":"",
         "desc":"Orden, planificación, disciplina y cumplimiento de objetivos.",
         "color":"#A1C3D1",
         "fort_high":[
@@ -272,7 +272,7 @@ DIMENSIONES = {
         "no_apt_low":["Facilitación, mediación, soporte sensible"]
     },
     "Estabilidad Emocional": {
-        "code":"N", "icon":"🧘",
+        "code":"N", "icon":"",
         "desc":"Gestión del estrés, resiliencia y calma bajo presión.",
         "color":"#D6EADF",
         "fort_high":[
@@ -701,9 +701,9 @@ def view_inicio():
         """
         <div class="card">
           <h1 style="margin:0 0 6px 0; font-size:clamp(2.2rem,3.8vw,3rem); font-weight:900;">
-            🧠 Test Big Five (OCEAN) — Evaluación Laboral
+             Test Big Five (OCEAN) — Evaluación Laboral
           </h1>
-          <p class="tag" style="margin:0;">Fondo blanco · Texto negro · Diseño profesional y responsivo</p>
+          <p class="tag" style="margin:0;">Test Creado Por Leben Spa/p>
         </div>
         """, unsafe_allow_html=True
     )
@@ -737,7 +737,7 @@ def view_inicio():
             </div>
             """, unsafe_allow_html=True
         )
-        if st.button("🚀 Iniciar evaluación", type="primary", use_container_width=True):
+        if st.button(" Iniciar evaluación", type="primary", use_container_width=True):
             st.session_state.stage = "test"
             st.session_state.q_idx = 0
             st.session_state.answers = {q["key"]:None for q in QUESTIONS}
@@ -799,15 +799,15 @@ def view_resultados():
     st.markdown("---")
     c1, c2 = st.columns(2)
     with c1:
-        st.subheader("🎯 Radar del perfil")
+        st.subheader(" Radar del perfil")
         st.plotly_chart(plot_radar(res), use_container_width=True)
     with c2:
-        st.subheader("📊 Puntuaciones por dimensión")
+        st.subheader(" Puntuaciones por dimensión")
         fig_bar, df_sorted = plot_bar(res)
         st.plotly_chart(fig_bar, use_container_width=True)
 
     st.markdown("---")
-    st.subheader("📋 Resumen de resultados")
+    st.subheader(" Resumen de resultados")
     tabla = pd.DataFrame({
         "Código":[DIMENSIONES[d]["code"] for d in order],
         "Dimensión":order,
@@ -819,7 +819,7 @@ def view_resultados():
 
     # ---------- Análisis por dimensión + Gauge ----------
     st.markdown("---")
-    st.subheader("🔍 Análisis por dimensión (laboral)")
+    st.subheader(" Análisis por dimensión (laboral)")
 
     pastel_class = {
         "Apertura a la Experiencia":"pastel-O",
@@ -935,3 +935,4 @@ else:
 if st.session_state._needs_rerun:
     st.session_state._needs_rerun = False
     st.rerun()
+
