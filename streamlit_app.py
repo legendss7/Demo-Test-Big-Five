@@ -703,7 +703,7 @@ def view_inicio():
           <h1 style="margin:0 0 6px 0; font-size:clamp(2.2rem,3.8vw,3rem); font-weight:900;">
              Test Big Five (OCEAN) — Evaluación Laboral
           </h1>
-          <p class="tag" style="margin:0;">Test Creado Por Leben Spa>
+          <p class="tag" style="margin:0;">Test Creado Por Leben Spa
         </div>
         """, unsafe_allow_html=True
     )
@@ -935,5 +935,6 @@ else:
 if st.session_state._needs_rerun:
     st.session_state._needs_rerun = False
     st.rerun()
+
 
 
