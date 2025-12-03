@@ -212,7 +212,7 @@ DIMENSIONES = {
         "no_apt_low":["PMO, compliance, control interno"]
     },
     "Extraversión": {
-        "code":"E", "icon":"🗣️",
+        "code":"E", "icon":"",
         "desc":"Asertividad, sociabilidad y energía en interacción.",
         "color":"#F2C6B4",
         "fort_high":[
@@ -242,7 +242,7 @@ DIMENSIONES = {
         "no_apt_low":["Puestos comerciales de alto contacto inmediato"]
     },
     "Amabilidad": {
-        "code":"A", "icon":"🤝",
+        "code":"A", "icon":"",
         "desc":"Colaboración, empatía y confianza.",
         "color":"#E8D6CB",
         "fort_high":[
@@ -937,6 +937,7 @@ else:
 if st.session_state._needs_rerun:
     st.session_state._needs_rerun = False
     st.rerun()
+
 
 
 
