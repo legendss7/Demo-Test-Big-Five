@@ -933,7 +933,7 @@ else:
         st.session_state.fecha = datetime.now().strftime("%d/%m/%Y %H:%M")
     view_resultados()
 
-# Rerun único si el callback de la radio lo marcó
+# Rerun único si el callback de la radio lo marcó holaaaaaaaaaaaaaaaaaaaa
 if st.session_state._needs_rerun:
     st.session_state._needs_rerun = False
     st.rerun()
